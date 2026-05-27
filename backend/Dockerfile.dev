@@ -1,0 +1,20 @@
+# Usamos una versión moderna y ligera de Node.js
+FROM node:20-alpine
+
+# Establecemos el directorio de trabajo dentro del contenedor
+WORKDIR /app
+
+# Copiamos los archivos de definición de dependencias
+COPY package*.json ./
+
+# Instalamos las dependencias de desarrollo y producción
+RUN npm install
+
+# Copiamos el resto del código del backend
+COPY . .
+
+# Exponemos el puerto en el que corre Express
+EXPOSE 5000
+
+# Comando para arrancar la app en modo desarrollo
+CMD ["npm", "run", "dev"]
