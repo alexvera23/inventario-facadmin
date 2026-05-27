@@ -1,0 +1,88 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// 1. Definición de Enums
+enum Rol {
+  ADMIN
+  ENCARGADO
+  SOLICITANTE
+}
+
+enum TipoMovimiento {
+  ENTRADA
+  SALIDA
+}
+
+// 2. Modelo de Usuarios (Personal de la Facultad)
+model Usuario {
+  id              Int          @id @default(autoincrement())
+  id_interno      String       @unique @db.VarChar(12)
+  nombre          String       @db.VarChar(100)
+  correo          String?      @db.VarChar(100)
+  departamento    String       @db.VarChar(50)
+  rol             Rol
+  
+  // Relaciones inversas (Un usuario puede tener muchos movimientos)
+  solicitudes     Movimiento[] @relation("SolicitanteRel")
+  registros       Movimiento[] @relation("EncargadoRel")
+
+  @@map("usuarios") // Mapea el modelo a la tabla física "usuarios"
+}
+
+// 3. Modelo de Productos (Catálogo de Insumos)
+model Producto {
+  id            Int          @id @default(autoincrement())
+  nombre        String       @db.VarChar(100)
+  categoria     String       @db.VarChar(50)
+  unidad_medida String       @db.VarChar(15)
+  stock_actual  Decimal      @default(0.00) @db.Decimal(10, 2)
+  stock_minimo  Decimal      @default(0.00) @db.Decimal(10, 2)
+  
+  // Relaciones
+  embalajes     Embalaje[]
+  movimientos   Movimiento[]
+
+  @@map("productos")
+}
+
+// 4. Modelo de Embalajes (Conversión para compras a granel)
+model Embalaje {
+  id                Int      @id @default(autoincrement())
+  producto_id       Int
+  nombre_embalaje   String   @db.VarChar(50) // Ej: "Caja con 100", "Porrón 20L"
+  factor_conversion Decimal  @db.Decimal(10, 2) // Ej: 100.00 o 20.00
+  
+  // Relación con Producto
+  producto          Producto @relation(fields: [producto_id], references: [id], onDelete: Cascade)
+
+  @@map("embalajes")
+}
+
+// 5. Modelo de Movimientos (Bitácora de Inventario)
+model Movimiento {
+  id             Int            @id @default(autoincrement())
+  producto_id    Int
+  tipo           TipoMovimiento
+  cantidad       Decimal        @db.Decimal(10, 2)
+  solicitante_id Int?
+  encargado_id   Int
+  fecha          DateTime       @default(now()) @db.Timestamp
+  observaciones  String?        @db.Text
+
+  // Relaciones (Llaves Foráneas)
+  producto       Producto       @relation(fields: [producto_id], references: [id], onDelete: Restrict)
+  solicitante    Usuario?       @relation("SolicitanteRel", fields: [solicitante_id], references: [id], onDelete: SetNull)
+  encargado      Usuario        @relation("EncargadoRel", fields: [encargado_id], references: [id], onDelete: Restrict)
+
+  @@map("movimientos")
+}
