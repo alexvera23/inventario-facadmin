@@ -5,6 +5,7 @@ const prisma = require('./config/db');
 // 1. Importar las rutas de productos
 const productoRoutes = require('./routes/productoRoutes');
 const movimientoRoutes = require('./routes/movimientoRoutes');
+const reporteRoutes = require('./routes/reporteRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -47,6 +48,7 @@ app.get('/api/health', async (req, res) => {
 // ==========================================
 app.use('/api/productos', productoRoutes);
 app.use('/api/movimientos',movimientoRoutes);
+app.use('/api/reportes',reporteRoutes);
 
 // Health check de la base de datos
 app.get('/api/health', async (req, res) => {
