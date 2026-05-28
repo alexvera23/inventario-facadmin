@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 // Importamos la instancia de la base de datos para asegurar su inicialización
 const prisma = require('./config/db');
+// 1. Importar las rutas de productos
+const productoRoutes = require('./routes/productoRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -40,7 +42,30 @@ app.get('/api/health', async (req, res) => {
 });
 
 // Aquí registraremos los enrutadores de los siguientes pasos
-// app.use('/api/productos', productoRoutes);
+// ==========================================
+// REGISTRO DE RUTAS
+// ==========================================
+// 2. Montar las rutas del catálogo
+app.use('/api/productos', productoRoutes);
+
+// Health check de la base de datos
+app.get('/api/health', async (req, res) => {
+    try {
+        await prisma.$queryRaw`SELECT 1`;
+        return res.status(200).json({
+            status: 'ok',
+            message: 'Servidor FacAdmin operativo',
+            database: 'Conectada exitosamente en entorno Docker'
+        });
+    } catch (error) {
+        console.error(' Error en el Health Check:', error);
+        return res.status(500).json({
+            status: 'error',
+            message: 'El servidor está vivo pero la base de datos no responde',
+            error: error.message
+        });
+    }
+});
 // app.use('/api/movimientos', movimientoRoutes);
 
 // ==========================================
