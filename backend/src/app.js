@@ -4,6 +4,7 @@ const cors = require('cors');
 const prisma = require('./config/db');
 // 1. Importar las rutas de productos
 const productoRoutes = require('./routes/productoRoutes');
+const movimientoRoutes = require('./routes/movimientoRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -41,12 +42,11 @@ app.get('/api/health', async (req, res) => {
     }
 });
 
-// Aquí registraremos los enrutadores de los siguientes pasos
 // ==========================================
 // REGISTRO DE RUTAS
 // ==========================================
-// 2. Montar las rutas del catálogo
 app.use('/api/productos', productoRoutes);
+app.use('/api/movimientos',movimientoRoutes);
 
 // Health check de la base de datos
 app.get('/api/health', async (req, res) => {
@@ -66,7 +66,7 @@ app.get('/api/health', async (req, res) => {
         });
     }
 });
-// app.use('/api/movimientos', movimientoRoutes);
+
 
 // ==========================================
 // ARRANQUE DEL SERVIDOR
