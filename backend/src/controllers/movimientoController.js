@@ -1,15 +1,15 @@
 const movimientoService = require('../services/movimientoService');
 
 class MovimientoController {
-    // POST /api/movimientos/salida
-    async registrarSalida(req, res) {
+    // POST /api/movimientos
+    async crearMovimiento(req, res) {
         try {
-            const { productoId, cantidad, solicitanteId, encargadoId, embalajeId, observaciones } = req.body;
+            const { productoId, cantidad, solicitanteId, encargadoId, embalajeId, tipo, observaciones } = req.body;
 
-            // Validación básica de campos obligatorios
-            if (!productoId || !cantidad || !solicitanteId || !encargadoId) {
+            // Validaciones obligatorias generales
+            if (!productoId || !cantidad || !solicitanteId || !encargadoId || !tipo) {
                 return res.status(400).json({ 
-                    message: 'Los campos productoId, cantidad, solicitanteId y encargadoId son estrictamente obligatorios.' 
+                    message: 'Los campos productoId, cantidad, solicitanteId, encargadoId y tipo son estrictamente obligatorios.' 
                 });
             }
 
@@ -17,34 +17,36 @@ class MovimientoController {
                 return res.status(400).json({ message: 'La cantidad debe ser un número mayor a cero.' });
             }
 
-            const resultado = await movimientoService.registrarSalida({
+            const resultado = await movimientoService.registrarMovimiento({
                 productoId,
                 cantidad,
                 solicitanteId,
                 encargadoId,
                 embalajeId,
+                tipo: tipo.toUpperCase(), // Asegura que vaya en mayúsculas
                 observaciones
             });
 
             return res.status(201).json({
-                message: 'Salida de material registrada exitosamente en ventanilla.',
+                message: `Movimiento de tipo ${tipo.toUpperCase()} registrado exitosamente.`,
                 data: resultado
             });
 
         } catch (error) {
-            // Manejo de errores controlados de las reglas de negocio
             switch (error.message) {
+                case 'TIPO_MOVIMIENTO_INVALIDO':
+                    return res.status(400).json({ message: 'El tipo de movimiento debe ser ENTRADA o SALIDA.' });
                 case 'PRODUCTO_NOT_FOUND':
-                    return res.status(404).json({ message: 'El insumo especificado no existe en el catálogo.' });
+                    return res.status(404).json({ message: 'El insumo especificado no existe.' });
                 case 'SOLICITANTE_NOT_FOUND':
-                    return res.status(404).json({ message: 'El solicitante no se encuentra registrado en el sistema.' });
+                    return res.status(404).json({ message: 'El usuario asociado no se encuentra registrado.' });
                 case 'EMBALAJE_INVALIDO':
-                    return res.status(400).json({ message: 'La regla de empaque/granel seleccionada no corresponde a este producto.' });
+                    return res.status(400).json({ message: 'La regla de embalaje no corresponde a este producto.' });
                 case 'STOCK_INSUFICIENTE':
-                    return res.status(422).json({ message: 'Operación denegada: Inventario insuficiente para cubrir la solicitud.' });
+                    return res.status(422).json({ message: 'Operación denegada: Inventario insuficiente para la salida.' });
                 default:
-                    console.error('❌ Error crítico al procesar salida:', error);
-                    return res.status(500).json({ message: 'Error interno en el motor transaccional del servidor.' });
+                    console.error(' Error crítico en movimientos:', error);
+                    return res.status(500).json({ message: 'Error interno en el servidor.' });
             }
         }
     }
@@ -55,8 +57,8 @@ class MovimientoController {
             const historial = await movimientoService.obtenerHistorial();
             return res.status(200).json(historial);
         } catch (error) {
-            console.error('❌ Error al recuperar bitácora:', error);
-            return res.status(500).json({ message: 'Error al recuperar el historial de movimientos.' });
+            console.error(' Error al recuperar bitácora:', error);
+            return res.status(500).json({ message: 'Error al recuperar el historial.' });
         }
     }
 }

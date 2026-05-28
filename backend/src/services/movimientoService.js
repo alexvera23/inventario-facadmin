@@ -2,8 +2,12 @@ const prisma = require('../config/db');
 const { Prisma } = require('@prisma/client');
 
 class MovimientoService {
-    async registrarSalida({ productoId, cantidad, solicitanteId, encargadoId, embalajeId, observaciones }) {
-        // Ejecutamos todo dentro de una transacción para evitar inconsistencias
+    async registrarMovimiento({ productoId, cantidad, solicitanteId, encargadoId, embalajeId, tipo, observaciones }) {
+        // Validar que el tipo de movimiento sea correcto
+        if (!['ENTRADA', 'SALIDA'].includes(tipo)) {
+            throw new Error('TIPO_MOVIMIENTO_INVALIDO');
+        }
+
         return await prisma.$transaction(async (tx) => {
             
             // 1. Validar que el producto exista
@@ -14,7 +18,7 @@ class MovimientoService {
                 throw new Error('PRODUCTO_NOT_FOUND');
             }
 
-            // 2. Validar que el solicitante exista
+            // 2. Validar que el usuario (solicitante/proveedor/personal) exista
             const solicitante = await tx.usuario.findUnique({
                 where: { id: parseInt(solicitanteId) }
             });
@@ -22,8 +26,8 @@ class MovimientoService {
                 throw new Error('SOLICITANTE_NOT_FOUND');
             }
 
-            // 3. Calcular la cantidad real a descontar basándose en si se usó un embalaje
-            let cantidadADescontar = new Prisma.Decimal(cantidad);
+            // 3. Calcular la cantidad neta usando el factor de conversión del embalaje si existe
+            let cantidadNeta = new Prisma.Decimal(cantidad);
 
             if (embalajeId) {
                 const embalaje = await tx.embalaje.findUnique({
@@ -32,29 +36,36 @@ class MovimientoService {
                 if (!embalaje || embalaje.producto_id !== producto.id) {
                     throw new Error('EMBALAJE_INVALIDO');
                 }
-                // Multiplicamos la cantidad por el factor (Ej: 2 cajas * 48 piezas = 96 piezas)
-                cantidadADescontar = cantidadADescontar.mul(embalaje.factor_conversion);
+                // Multiplicamos la cantidad por su factor (Ej: 10 cajas * 48 piezas = 480 piezas netas)
+                cantidadNeta = cantidadNeta.mul(embalaje.factor_conversion);
             }
 
-            // 4. Verificar si hay stock suficiente usando los métodos de Prisma.Decimal
-            if (producto.stock_actual.lt(cantidadADescontar)) {
-                throw new Error('STOCK_INSUFICIENTE');
+            let nuevoStock;
+
+            // 4. Aplicar lógica dependiendo de si es ENTRADA o SALIDA
+            if (tipo === 'SALIDA') {
+                // Verificar si hay suficiente stock para la salida
+                if (producto.stock_actual.lt(cantidadNeta)) {
+                    throw new Error('STOCK_INSUFICIENTE');
+                }
+                nuevoStock = producto.stock_actual.minus(cantidadNeta);
+            } else {
+                // Si es ENTRADA, simplemente sumamos al stock actual
+                nuevoStock = producto.stock_actual.plus(cantidadNeta);
             }
 
-            // 5. Descontar del stock actual del producto
+            // 5. Actualizar el stock del producto
             const productoActualizado = await tx.producto.update({
                 where: { id: producto.id },
-                data: {
-                    stock_actual: producto.stock_actual.minus(cantidadADescontar)
-                }
+                data: { stock_actual: nuevoStock }
             });
 
-            // 6. Registrar el movimiento en la bitácora inmutable
+            // 6. Registrar en la bitácora
             const nuevoMovimiento = await tx.movimiento.create({
                 data: {
                     producto_id: producto.id,
-                    tipo: 'SALIDA',
-                    cantidad: cantidadADescontar,
+                    tipo: tipo, // Guardará 'ENTRADA' o 'SALIDA'
+                    cantidad: cantidadNeta,
                     solicitante_id: solicitante.id,
                     encargado_id: parseInt(encargadoId),
                     observaciones: observaciones || null
@@ -67,12 +78,12 @@ class MovimientoService {
 
             return {
                 movimiento: nuevoMovimiento,
-                stock_restante: productoActualizado.stock_actual
+                stock_resultante: productoActualizado.stock_actual,
+                cantidad_neta_afectada: cantidadNeta
             };
         });
     }
 
-    // Obtener todo el historial de la ventanilla (Útil para auditorías)
     async obtenerHistorial() {
         return await prisma.movimiento.findMany({
             include: {

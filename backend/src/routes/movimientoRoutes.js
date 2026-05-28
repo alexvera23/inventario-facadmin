@@ -1,9 +1,10 @@
 const express = require('express');
-const movimientoController = require('../controllers/mysql/../movimientoController');
+const movimientoController = require('../controllers/movimientoController');
 
 const router = express.Router();
 
-router.post('/salida', movimientoController.registrarSalida);
+// Cambiamos a un POST unificado en la raíz del módulo
+router.post('/', movimientoController.crearMovimiento);
 router.get('/historial', movimientoController.obtenerHistorial);
 
 module.exports = router;
