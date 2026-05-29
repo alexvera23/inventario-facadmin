@@ -3,6 +3,10 @@ const reporteController = require('../controllers/reporteController');
 
 const router = express.Router();
 
-router.get('/consumo-semanal', reporteController.consumoSemanal);
+// Ruta para el consumo y entradas global de la facultad
+router.get('/general', reporteController.reporteGeneral);
+
+// Ruta para auditar a un usuario específico
+router.get('/usuario/:id', reporteController.actividadUsuario);
 
 module.exports = router;
