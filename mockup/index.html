@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mockup FacAdmin - Paletas BUAP</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body id="app-wrapper" class="antialiased min-h-screen transition-colors duration-500 bg-[#F8FAFC] text-slate-800 font-sans flex">
+
+    <aside id="sidebar" class="w-64 transition-colors duration-500 bg-[#002D4C] text-white flex flex-col">
+        <div class="p-6">
+            <h1 class="text-2xl font-black tracking-tight">Fac<span id="logo-accent" class="text-[#00B3E1]">Admin</span></h1>
+            <p class="text-xs opacity-70 mt-1">Ventanilla de Inventario</p>
+        </div>
+        <nav class="flex-1 px-4 space-y-2 mt-4">
+            <a href="#" class="block py-2.5 px-4 rounded transition duration-200 bg-white/10 font-medium"> Catálogo</a>
+            <a href="#" class="block py-2.5 px-4 rounded transition duration-200 hover:bg-white/5 opacity-70"> Entradas / Salidas</a>
+            <a href="#" class="block py-2.5 px-4 rounded transition duration-200 hover:bg-white/5 opacity-70"> Reportes</a>
+            <div class="mt-6 px-4">
+    <p class="text-xs font-bold uppercase opacity-60 mb-3">
+        Vista de Reportes
+    </p>
+
+    <div class="space-y-2">
+        <div class="flex items-center gap-2">
+            <span class="w-16 text-xs">Entradas</span>
+            <div class="h-3 flex-1 rounded bg-green-500"></div>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <span class="w-16 text-xs">Salidas</span>
+            <div class="h-3 flex-1 rounded bg-[#00B3E1]"></div>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <span class="w-16 text-xs">Alertas</span>
+            <div class="h-3 w-1/3 rounded bg-orange-500"></div>
+        </div>
+    </div>
+</div>
+        </nav>
+    </aside>
+
+    <main class="flex-1 flex flex-col h-screen overflow-hidden">
+        
+        <header id="header" class="px-8 py-5 flex justify-between items-center transition-colors duration-500 bg-white border-b border-slate-200">
+            <h2 class="text-xl font-bold">Gestión de Insumos</h2>
+            <div class="flex items-center gap-3">
+                <label for="theme-selector" class="text-sm font-semibold opacity-80">Paleta de Diseño:</label>
+                <select id="theme-selector" onchange="cambiarTema()" class="border border-slate-300 rounded p-2 text-sm bg-transparent outline-none focus:ring-2 focus:ring-[#00B3E1] transition-all cursor-pointer">
+                    <option value="1">Opción 1: Vanguardia Energética (Coral)</option>
+                    <option value="2">Opción 2: Sleek Cyber-Minimalist (Oscuro)</option>
+                    <option value="3">Opción 3: Alta Densidad Profesional (Claro)</option>
+                    <option value="4">Opción 4: Ejecutivo Corporativo</option>
+                    <option value="5">Opción 5: Moderno Premium</option>
+                    <option value="6">Opción 6: Universidad Moderna</option>
+                    <option value="7">Opción 7: Material Design</option>
+                    <option value="8">Opción 8: Dark Neo</option>
+                </select>
+            </div>
+        </header>
+
+        <div class="p-8 flex-1 overflow-y-auto">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                
+                <div id="card" class="rounded-xl p-6 transition-colors duration-500 shadow-sm border border-slate-200 bg-white">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="font-bold text-lg">Cloro Líquido Concentrado</h3>
+                            <p class="text-sm opacity-60">Categoría: Limpieza</p>
+                        </div>
+                        <span id="badge" class="text-xs font-bold px-2.5 py-1 rounded transition-colors duration-500 bg-[#FF6B35]/10 text-[#FF6B35]">
+                            Stock Mínimo
+                        </span>
+                    </div>
+                    
+                    <div class="mt-6 flex items-end gap-2">
+                        <span id="stock-text" class="text-4xl font-black transition-colors duration-500 text-[#00B3E1]">10.00</span>
+                        <span class="text-lg font-bold opacity-70 mb-1">Litros</span>
+                    </div>
+
+                    <button id="btn-primary" class="mt-6 w-full font-semibold py-2.5 rounded-lg transition-colors duration-300 shadow-sm bg-[#002D4C] text-white hover:bg-[#00B3E1]">
+                        Registrar Salida
+                    </button>
+                </div>
+
+                <div class="rounded-xl p-6 transition-colors duration-500 shadow-sm border opacity-70" style="border-color: inherit; background-color: inherit;">
+                    <h3 class="font-bold text-lg">Papel Higiénico Institucional</h3>
+                    <p class="text-sm opacity-60">Categoría: Higiene</p>
+                    <div class="mt-6 flex items-end gap-2">
+                        <span class="text-4xl font-black transition-colors duration-500">120.00</span>
+                        <span class="text-lg font-bold opacity-70 mb-1">Pzas</span>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Diccionario con las clases de Tailwind para cada tema
+        const temas = {
+            1: { // Vanguardia Energética
+                wrapper: 'bg-[#F8FAFC] text-slate-800',
+                sidebar: 'bg-[#002D4C] text-white border-none',
+                logoAccent: 'text-[#00B3E1]',
+                header: 'bg-white border-slate-200',
+                card: 'bg-white border-slate-200 shadow-sm',
+                badge: 'bg-[#FF6B35]/10 text-[#FF6B35]',
+                stockText: 'text-[#00B3E1]',
+                btnPrimary: 'bg-[#002D4C] text-white hover:bg-[#00B3E1]'
+            },
+            2: { // Modo Oscuro Premium
+                wrapper: 'bg-[#0F172A] text-slate-200',
+                sidebar: 'bg-[#0B132B] text-slate-200 border-r border-slate-800',
+                logoAccent: 'text-[#00B3E1]',
+                header: 'bg-[#0F172A] border-slate-800',
+                card: 'bg-[#1E293B] border-slate-700 shadow-md',
+                badge: 'bg-[#F59E0B]/20 text-[#F59E0B]',
+                stockText: 'text-[#00B3E1]',
+                btnPrimary: 'bg-[#00B3E1] text-[#0B132B] hover:bg-white'
+            },
+            3: { // Alta Densidad (Stripe-like)
+                wrapper: 'bg-white text-[#002D4C]',
+                sidebar: 'bg-[#F1F5F9] text-[#002D4C] border-r border-slate-200',
+                logoAccent: 'text-[#00B3E1]',
+                header: 'bg-white border-slate-200',
+                card: 'bg-[#F8FAFC] border-slate-200 shadow-none',
+                badge: 'bg-[#00B3E1]/10 text-[#00B3E1]',
+                stockText: 'text-[#002D4C]',
+                btnPrimary: 'bg-[#00B3E1] text-white hover:bg-[#002D4C]'
+            },
+            4: {
+                wrapper: 'bg-[#F8FAFC] text-slate-800',
+                sidebar: 'bg-[#002D4C] text-white',
+                logoAccent: 'text-[#10B981]',
+                header: 'bg-white border-slate-200',
+                card: 'bg-white border-slate-200 shadow-sm',
+                badge: 'bg-[#10B981]/10 text-[#10B981]',
+                stockText: 'text-[#10B981]',
+                btnPrimary: 'bg-[#002D4C] text-white hover:bg-[#10B981]'
+            },
+
+            5: {
+                wrapper: 'bg-[#F8FAFC] text-slate-800',
+                sidebar: 'bg-[#111827] text-white',
+                logoAccent: 'text-[#8B5CF6]',
+                header: 'bg-white border-slate-200',
+                card: 'bg-white border-slate-200 shadow-sm',
+                badge: 'bg-[#8B5CF6]/10 text-[#8B5CF6]',
+                stockText: 'text-[#8B5CF6]',
+                btnPrimary: 'bg-[#111827] text-white hover:bg-[#8B5CF6]'
+            },
+
+            6: {
+                wrapper: 'bg-[#F8FAFC] text-[#002D4C]',
+                sidebar: 'bg-[#002D4C] text-white',
+                logoAccent: 'text-[#F59E0B]',
+                header: 'bg-white border-slate-200',
+                card: 'bg-white border-slate-200 shadow-sm',
+                badge: 'bg-[#F59E0B]/10 text-[#F59E0B]',
+                stockText: 'text-[#F59E0B]',
+                btnPrimary: 'bg-[#002D4C] text-white hover:bg-[#F59E0B]'
+            },
+
+            7: {
+                wrapper: 'bg-[#F8FAFC] text-slate-800',
+                sidebar: 'bg-[#2563EB] text-white',
+                logoAccent: 'text-[#06B6D4]',
+                header: 'bg-white border-slate-200',
+                card: 'bg-white border-slate-200 shadow-sm',
+                badge: 'bg-[#06B6D4]/10 text-[#06B6D4]',
+                stockText: 'text-[#2563EB]',
+                btnPrimary: 'bg-[#2563EB] text-white hover:bg-[#06B6D4]'
+            },
+
+            8: {
+                wrapper: 'bg-[#020617] text-slate-200',
+                sidebar: 'bg-[#0F172A] text-slate-200',
+                logoAccent: 'text-[#22C55E]',
+                header: 'bg-[#0F172A] border-slate-800',
+                card: 'bg-[#1E293B] border-slate-700 shadow-md',
+                badge: 'bg-[#22C55E]/10 text-[#22C55E]',
+                stockText: 'text-[#22C55E]',
+                btnPrimary: 'bg-[#22C55E] text-[#020617] hover:bg-white'
+            }
+        };
+
+        function aplicarClases(id, clasesNuevas) {
+            const elemento = document.getElementById(id);
+            // Limpiar el className conservando las clases base estructurales (las que no definen color)
+            // Para mantener el código JS simple en este prototipo, reemplazamos todo.
+            // En React, esto lo manejarás mucho más fácil con variables de estado.
+            
+            const clasesEstructurales = {
+                'app-wrapper': 'antialiased min-h-screen transition-colors duration-500 font-sans flex',
+                'sidebar': 'w-64 transition-colors duration-500 flex flex-col',
+                'logo-accent': '',
+                'header': 'px-8 py-5 flex justify-between items-center transition-colors duration-500',
+                'card': 'rounded-xl p-6 transition-colors duration-500',
+                'badge': 'text-xs font-bold px-2.5 py-1 rounded transition-colors duration-500',
+                'stock-text': 'text-4xl font-black transition-colors duration-500',
+                'btn-primary': 'mt-6 w-full font-semibold py-2.5 rounded-lg transition-colors duration-300 shadow-sm'
+            };
+
+            elemento.className = `${clasesEstructurales[id]} ${clasesNuevas}`;
+        }
+
+        function cambiarTema() {
+            const seleccion = document.getElementById('theme-selector').value;
+            const t = temas[seleccion];
+
+            aplicarClases('app-wrapper', t.wrapper);
+            aplicarClases('sidebar', t.sidebar);
+            aplicarClases('logo-accent', t.logoAccent);
+            aplicarClases('header', t.header);
+            aplicarClases('card', t.card);
+            aplicarClases('badge', t.badge);
+            aplicarClases('stock-text', t.stockText);
+            aplicarClases('btn-primary', t.btnPrimary);
+        }
+    </script>
+</body>
+</html>
