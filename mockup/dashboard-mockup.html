@@ -239,6 +239,34 @@
   /* pulse animation for confirm btn */
   @keyframes pulse-glow { 0%,100%{box-shadow:0 0 0 0 var(--accent-glow-strong)} 50%{box-shadow:0 0 0 8px transparent} }
   .btn-confirm:not(:hover) { animation: pulse-glow 2.5s ease infinite; }
+
+  /* ── REPORT MODAL ── */
+  #report-modal-bg { position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:80;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);padding:16px; }
+  #report-modal-bg.open { display:flex; }
+  #report-modal { background:var(--bg-card);border:1px solid var(--border);border-radius:18px;width:100%;max-width:560px;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,0.3);animation:modalIn 0.25s cubic-bezier(.4,0,.2,1); }
+  @keyframes modalIn { from{opacity:0;transform:scale(0.96) translateY(8px)} to{opacity:1;transform:none} }
+
+  /* ── PERIOD TABS ── */
+  .period-tabs { display:flex;gap:4px;background:var(--input-bg);border-radius:10px;padding:3px; }
+  .period-tab { flex:1;padding:7px 8px;border-radius:8px;border:none;background:transparent;font-size:0.75rem;font-weight:700;font-family:'Syne',sans-serif;cursor:pointer;transition:all 0.2s;color:var(--text-muted); }
+  .period-tab.active { background:var(--bg-card);color:var(--accent);box-shadow:0 1px 4px rgba(0,0,0,0.1); }
+
+  /* ── REPORT PREVIEW TABLE ── */
+  .preview-row { display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:0.8rem; }
+  .preview-row:last-child { border-bottom:none; }
+
+  /* ── BTN EXCEL ── */
+  .btn-excel { background:transparent;color:#16A34A;font-family:'Syne',sans-serif;font-weight:700;font-size:0.8rem;border:1.5px solid #16A34A;border-radius:10px;padding:9px 14px;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:6px;white-space:nowrap; }
+  .btn-excel:hover { background:#16A34A;color:#fff; }
+  [data-theme="dark"] .btn-excel { color:#4ADE80;border-color:#4ADE80; }
+  [data-theme="dark"] .btn-excel:hover { background:#4ADE80;color:#002D4C; }
+
+  /* ── FILTER CHIP ── */
+  .filter-chip { display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:99px;border:1.5px solid var(--border);background:var(--input-bg);font-size:0.72rem;font-weight:700;font-family:'Syne',sans-serif;cursor:pointer;transition:all 0.2s;color:var(--text-secondary); }
+  .filter-chip.active,.filter-chip:hover { border-color:var(--accent);color:var(--accent);background:var(--accent-glow); }
+
+  /* ── REPORT SECTION LABEL ── */
+  .report-section-label { font-size:0.65rem;font-weight:700;letter-spacing:0.1em;color:var(--text-muted);font-family:'Syne',sans-serif;text-transform:uppercase;margin-bottom:8px; }
 </style>
 </head>
 <body>
@@ -549,9 +577,17 @@
           <option>Abril 2026</option>
           <option>Marzo 2026</option>
         </select>
-        <button class="btn-secondary" style="display:flex;align-items:center;gap:6px;white-space:nowrap;">
+        <button class="btn-secondary" style="display:flex;align-items:center;gap:6px;white-space:nowrap;" onclick="exportPDF()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-          Exportar PDF
+          PDF
+        </button>
+        <button class="btn-excel" onclick="exportXLSX('global', null, 'mensual')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          Excel
+        </button>
+        <button class="btn-primary" style="display:flex;align-items:center;gap:6px;white-space:nowrap;" onclick="openReportModal('global', null)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+          Reporte personalizado
         </button>
       </div>
     </div>
@@ -678,12 +714,17 @@
   </div>
 
   <!-- Footer actions -->
-  <div style="padding:16px 20px;border-top:1px solid var(--border);background:var(--bg-app);display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
-    <button class="btn-secondary" style="font-size:0.75rem;padding:8px 6px;">Ajuste manual</button>
-    <button class="btn-secondary" style="font-size:0.75rem;padding:8px 6px;">Entrada emergencia</button>
-    <button class="btn-primary" style="font-size:0.75rem;padding:8px 6px;">Abastecer</button>
+  <div style="padding:16px 20px;border-top:1px solid var(--border);background:var(--bg-app);display:flex;flex-direction:column;gap:8px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+      <button class="btn-secondary" style="font-size:0.75rem;padding:8px 6px;">Ajuste manual</button>
+      <button class="btn-secondary" style="font-size:0.75rem;padding:8px 6px;">Entrada emergencia</button>
+      <button class="btn-primary" style="font-size:0.75rem;padding:8px 6px;">Abastecer</button>
+    </div>
+    <button class="btn-excel" style="width:100%;justify-content:center;" onclick="openReportModal('insumo', currentDrawerInsumoId)">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      Generar reporte de este insumo
+    </button>
   </div>
-</aside>
 
 <!-- User Drawer (Usuarios view) -->
 <aside id="user-drawer" style="position:fixed;inset-y:0;right:0;z-index:60;width:100%;max-width:380px;background:var(--bg-card);border-left:1px solid var(--border);box-shadow:var(--shadow-drawer);transform:translateX(100%);transition:transform 0.3s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;">
@@ -725,11 +766,133 @@
       </div>
     </div>
   </div>
-  <div style="padding:14px 20px;border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-    <button class="btn-secondary">Editar usuario</button>
-    <button class="btn-primary">Ver historial completo</button>
+  <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <button class="btn-secondary">Editar usuario</button>
+      <button class="btn-primary">Ver historial</button>
+    </div>
+    <button class="btn-excel" style="width:100%;justify-content:center;" onclick="openReportModal('usuario', currentDrawerUserId)">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      Generar reporte de este usuario
+    </button>
   </div>
 </aside>
+
+<!-- ═══════════════════════════════════════════
+     CUSTOM REPORT MODAL
+═══════════════════════════════════════════ -->
+<div id="report-modal-bg" onclick="handleModalBgClick(event)">
+  <div id="report-modal">
+    <!-- Modal Header -->
+    <div style="padding:20px 22px 16px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          <div style="width:28px;height:28px;border-radius:8px;background:var(--accent-glow);display:flex;align-items:center;justify-content:center;border:1px solid var(--accent-glow-strong);">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+          </div>
+          <h3 style="font-family:'Syne',sans-serif;font-weight:800;font-size:1rem;">Reporte Personalizado</h3>
+        </div>
+        <p id="rm-subtitle" style="font-size:0.78rem;color:var(--text-muted);">Configura el alcance y período del reporte</p>
+      </div>
+      <button onclick="closeReportModal()" class="icon-btn" style="flex-shrink:0;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <!-- Modal Body -->
+    <div style="padding:20px 22px;overflow-y:auto;display:flex;flex-direction:column;gap:20px;">
+
+      <!-- SCOPE SECTION -->
+      <div>
+        <p class="report-section-label">Alcance del reporte</p>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;" id="rm-scope-chips">
+          <button class="filter-chip active" data-scope="global" onclick="setReportScope('global')">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path stroke-linecap="round" d="M2 12h20M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/></svg>
+            General
+          </button>
+          <button class="filter-chip" data-scope="insumo" onclick="setReportScope('insumo')">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 10V7"/></svg>
+            Por Insumo
+          </button>
+          <button class="filter-chip" data-scope="usuario" onclick="setReportScope('usuario')">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+            Por Usuario
+          </button>
+        </div>
+      </div>
+
+      <!-- SUBJECT SELECTOR (insumo or usuario) -->
+      <div id="rm-subject-row" style="display:none;">
+        <p class="report-section-label" id="rm-subject-label">Seleccionar insumo</p>
+        <select class="field" id="rm-subject-select" style="font-size:0.83rem;"></select>
+      </div>
+
+      <!-- PERIOD SECTION -->
+      <div>
+        <p class="report-section-label">Período</p>
+        <div class="period-tabs" id="rm-period-tabs">
+          <button class="period-tab active" data-period="semanal" onclick="setReportPeriod('semanal')">Semanal</button>
+          <button class="period-tab" data-period="quincenal" onclick="setReportPeriod('quincenal')">Quincenal</button>
+          <button class="period-tab" data-period="mensual" onclick="setReportPeriod('mensual')">Mensual</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
+          <div>
+            <p style="font-size:0.7rem;color:var(--text-muted);font-weight:600;margin-bottom:4px;">Fecha inicio</p>
+            <input type="date" class="field" id="rm-date-from" style="font-size:0.82rem;">
+          </div>
+          <div>
+            <p style="font-size:0.7rem;color:var(--text-muted);font-weight:600;margin-bottom:4px;">Fecha fin</p>
+            <input type="date" class="field" id="rm-date-to" style="font-size:0.82rem;">
+          </div>
+        </div>
+      </div>
+
+      <!-- CONTENT CHECKBOXES -->
+      <div>
+        <p class="report-section-label">Incluir en el reporte</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;" id="rm-includes">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.8rem;font-weight:600;color:var(--text-secondary);">
+            <input type="checkbox" checked id="inc-movimientos" style="accent-color:var(--accent);width:14px;height:14px;">
+            Movimientos detallados
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.8rem;font-weight:600;color:var(--text-secondary);">
+            <input type="checkbox" checked id="inc-grafica" style="accent-color:var(--accent);width:14px;height:14px;">
+            Gráfica de tendencia
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.8rem;font-weight:600;color:var(--text-secondary);">
+            <input type="checkbox" checked id="inc-kpis" style="accent-color:var(--accent);width:14px;height:14px;">
+            KPIs y totales
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.8rem;font-weight:600;color:var(--text-secondary);">
+            <input type="checkbox" id="inc-alertas" style="accent-color:var(--accent);width:14px;height:14px;">
+            Alertas de stock bajo
+          </label>
+        </div>
+      </div>
+
+      <!-- PREVIEW -->
+      <div>
+        <p class="report-section-label">Vista previa del contenido</p>
+        <div class="card" style="padding:14px 16px;border-radius:10px;" id="rm-preview">
+          <!-- JS rendered -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Footer -->
+    <div style="padding:16px 22px;border-top:1px solid var(--border);background:var(--bg-app);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <button class="btn-secondary" onclick="closeReportModal()" style="margin-right:auto;">Cancelar</button>
+      <button class="btn-secondary" onclick="exportReportPDF()" style="display:flex;align-items:center;gap:6px;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+        Exportar PDF
+      </button>
+      <button class="btn-excel" onclick="exportReportXLSX()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        Exportar Excel
+      </button>
+    </div>
+  </div>
+</div>
 
 <!-- ═══════════════════════════════════════════
      TOAST
@@ -795,6 +958,13 @@ let selectedInsumo = null;
 let bandeja = [];
 let drawerChart = null;
 let reportCharts = {};
+let currentDrawerInsumoId = null;
+let currentDrawerUserId = null;
+
+// ── REPORT MODAL STATE ────────────────────
+let rmScope = 'global';
+let rmPeriod = 'semanal';
+let rmSubjectId = null;
 
 // ── INIT ──────────────────────────────────
 function init() {
@@ -903,6 +1073,7 @@ function renderCatalog() {
 function openDrawer(id) {
   const ins = insumos.find(i => i.id === id);
   if (!ins) return;
+  currentDrawerInsumoId = id;
   const si = stateInfo(ins.state);
   const pct = Math.round((ins.stock/ins.max)*100);
 
@@ -987,6 +1158,7 @@ function renderUsers() {
 function openUserDrawer(id) {
   const u = usuarios.find(u => u.id === id);
   if (!u) return;
+  currentDrawerUserId = id;
   document.getElementById('ud-avatar').textContent = u.initials;
   document.getElementById('ud-name').textContent = u.nombre;
   document.getElementById('ud-dept').textContent = u.dept + ' · ' + u.edificio;
@@ -1254,6 +1426,262 @@ function initReportCharts() {
       }
     });
   }
+}
+
+// ── REPORT MODAL ─────────────────────────
+function openReportModal(scope, subjectId) {
+  rmScope = scope || 'global';
+  rmSubjectId = subjectId || null;
+  rmPeriod = 'semanal';
+
+  // Set period dates
+  const today = new Date();
+  const from = new Date(today);
+  from.setDate(today.getDate() - 7);
+  document.getElementById('rm-date-to').value = today.toISOString().split('T')[0];
+  document.getElementById('rm-date-from').value = from.toISOString().split('T')[0];
+
+  // Sync scope chips
+  document.querySelectorAll('#rm-scope-chips .filter-chip').forEach(c => {
+    c.classList.toggle('active', c.dataset.scope === rmScope);
+  });
+
+  // Period tabs
+  document.querySelectorAll('#rm-period-tabs .period-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.period === rmPeriod);
+  });
+
+  // Populate subject select
+  updateSubjectRow();
+
+  // If launched from a specific subject, pre-select it
+  if (subjectId && rmScope !== 'global') {
+    setTimeout(() => {
+      const sel = document.getElementById('rm-subject-select');
+      if (sel) sel.value = subjectId;
+      updatePreview();
+    }, 50);
+  }
+
+  updateSubtitle();
+  updatePreview();
+  document.getElementById('report-modal-bg').classList.add('open');
+}
+
+function closeReportModal() {
+  document.getElementById('report-modal-bg').classList.remove('open');
+}
+
+function handleModalBgClick(e) {
+  if (e.target === document.getElementById('report-modal-bg')) closeReportModal();
+}
+
+function setReportScope(scope) {
+  rmScope = scope;
+  document.querySelectorAll('#rm-scope-chips .filter-chip').forEach(c => {
+    c.classList.toggle('active', c.dataset.scope === scope);
+  });
+  updateSubjectRow();
+  updateSubtitle();
+  updatePreview();
+}
+
+function updateSubjectRow() {
+  const row = document.getElementById('rm-subject-row');
+  const sel = document.getElementById('rm-subject-select');
+  const label = document.getElementById('rm-subject-label');
+  if (rmScope === 'global') { row.style.display = 'none'; return; }
+  row.style.display = 'block';
+  if (rmScope === 'insumo') {
+    label.textContent = 'Seleccionar insumo';
+    sel.innerHTML = insumos.map(i => `<option value="${i.id}">${i.nombre}</option>`).join('');
+    if (rmSubjectId && rmScope === 'insumo') sel.value = rmSubjectId;
+  } else {
+    label.textContent = 'Seleccionar usuario';
+    sel.innerHTML = usuarios.map(u => `<option value="${u.id}">${u.nombre} — ${u.dept}</option>`).join('');
+    if (rmSubjectId && rmScope === 'usuario') sel.value = rmSubjectId;
+  }
+  sel.onchange = () => { rmSubjectId = sel.value; updatePreview(); };
+}
+
+function setReportPeriod(period) {
+  rmPeriod = period;
+  document.querySelectorAll('#rm-period-tabs .period-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.period === period);
+  });
+  // Adjust dates
+  const today = new Date();
+  const from = new Date(today);
+  const days = period === 'semanal' ? 7 : period === 'quincenal' ? 15 : 30;
+  from.setDate(today.getDate() - days);
+  document.getElementById('rm-date-to').value = today.toISOString().split('T')[0];
+  document.getElementById('rm-date-from').value = from.toISOString().split('T')[0];
+  updateSubtitle();
+  updatePreview();
+}
+
+function updateSubtitle() {
+  const labels = { global: 'Reporte general · todos los insumos y usuarios', insumo: 'Reporte por insumo específico', usuario: 'Reporte por usuario / solicitante' };
+  document.getElementById('rm-subtitle').textContent = labels[rmScope] || '';
+}
+
+function updatePreview() {
+  const preview = document.getElementById('rm-preview');
+  const period = rmPeriod;
+  const dateFrom = document.getElementById('rm-date-from').value;
+  const dateTo = document.getElementById('rm-date-to').value;
+  const incMov = document.getElementById('inc-movimientos').checked;
+  const incKPI = document.getElementById('inc-kpis').checked;
+  const incAl = document.getElementById('inc-alertas').checked;
+
+  let subjectName = 'Todos los registros';
+  if (rmScope === 'insumo') {
+    const sel = document.getElementById('rm-subject-select');
+    const ins = insumos.find(i => i.id === (sel?.value || rmSubjectId));
+    subjectName = ins ? ins.nombre : '—';
+  } else if (rmScope === 'usuario') {
+    const sel = document.getElementById('rm-subject-select');
+    const usr = usuarios.find(u => u.id === (sel?.value || rmSubjectId));
+    subjectName = usr ? usr.nombre : '—';
+  }
+
+  // Simulate row count
+  const rows = rmScope === 'global' ? (period === 'semanal' ? 42 : period === 'quincenal' ? 87 : 347) :
+               rmScope === 'insumo' ? Math.floor(Math.random()*30+5) : Math.floor(Math.random()*50+10);
+
+  preview.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:0;">
+      <div class="preview-row">
+        <span style="color:var(--text-muted);font-size:0.78rem;">Alcance</span>
+        <span style="font-weight:700;font-size:0.82rem;">${subjectName}</span>
+      </div>
+      <div class="preview-row">
+        <span style="color:var(--text-muted);font-size:0.78rem;">Período</span>
+        <span style="font-weight:700;font-size:0.82rem;">${dateFrom} → ${dateTo}</span>
+      </div>
+      <div class="preview-row">
+        <span style="color:var(--text-muted);font-size:0.78rem;">Movimientos estimados</span>
+        <span style="font-weight:800;font-size:0.82rem;color:var(--accent);font-family:'IBM Plex Mono',monospace;">${rows} registros</span>
+      </div>
+      <div class="preview-row" style="border-bottom:none;">
+        <span style="color:var(--text-muted);font-size:0.78rem;">Contenido</span>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;">
+          ${incMov ? '<span class="badge badge-ok" style="font-size:0.6rem;">Movimientos</span>':'' }
+          ${incKPI ? '<span class="badge badge-ok" style="font-size:0.6rem;">KPIs</span>':'' }
+          <span class="badge badge-ok" style="font-size:0.6rem;">Gráfica</span>
+          ${incAl ? '<span class="badge badge-mid" style="font-size:0.6rem;">Alertas</span>':'' }
+        </div>
+      </div>
+    </div>`;
+}
+
+// Listen to checkbox changes to refresh preview
+document.addEventListener('DOMContentLoaded', () => {
+  ['inc-movimientos','inc-grafica','inc-kpis','inc-alertas'].forEach(id => {
+    document.getElementById(id).addEventListener('change', updatePreview);
+  });
+});
+
+// ── EXPORT FUNCTIONS ──────────────────────
+
+function exportPDF() {
+  showToast('Generando PDF...', 'El archivo estará listo en un momento', true);
+}
+
+function exportXLSX(scope, subjectId, period) {
+  generateXLSX(scope, subjectId, period || 'mensual');
+}
+
+function exportReportPDF() {
+  closeReportModal();
+  showToast('Exportando PDF...', `Reporte ${rmPeriod} generado`, true);
+}
+
+function exportReportXLSX() {
+  const scope = rmScope;
+  const subjectId = document.getElementById('rm-subject-select')?.value || rmSubjectId;
+  closeReportModal();
+  generateXLSX(scope, subjectId, rmPeriod);
+}
+
+function generateXLSX(scope, subjectId, period) {
+  // Build CSV data to create a real downloadable file
+  const dateFrom = document.getElementById('rm-date-from')?.value || '2026-05-01';
+  const dateTo = document.getElementById('rm-date-to')?.value || '2026-05-31';
+
+  let title = 'Reporte General';
+  let rows = [];
+
+  if (scope === 'insumo') {
+    const ins = insumos.find(i => i.id === subjectId) || insumos[0];
+    title = `Reporte_Insumo_${ins.nombre.replace(/\s+/g,'_')}`;
+    rows = [
+      ['FacAdmin — Reporte de Insumo', '', '', ''],
+      ['Insumo:', ins.nombre, 'Categoría:', ins.cat],
+      ['Stock actual:', `${ins.stock} ${ins.unidad}`, 'Período:', `${dateFrom} a ${dateTo}`],
+      ['','','',''],
+      ['Fecha', 'Tipo de movimiento', 'Solicitante', `Cantidad (${ins.unidad})`],
+      ...movimientosMock.map(m => [
+        new Date().toLocaleDateString('es-MX'), m.tipo, m.who, m.val
+      ]),
+      ['','','',''],
+      ['KPIs','','',''],
+      ['Salidas en el período', 24, '', ''],
+      ['Entradas en el período', 50, '', ''],
+      ['Stock mínimo registrado', ins.stock - 10, '', ''],
+      ['Stock máximo registrado', ins.max, '', ''],
+    ];
+  } else if (scope === 'usuario') {
+    const usr = usuarios.find(u => u.id === subjectId) || usuarios[0];
+    title = `Reporte_Usuario_${usr.nombre.replace(/\s+/g,'_')}`;
+    rows = [
+      ['FacAdmin — Reporte de Usuario', '', '', ''],
+      ['Usuario:', usr.nombre, 'Depto:', usr.dept],
+      ['Edificio:', usr.edificio, 'Período:', `${dateFrom} a ${dateTo}`],
+      ['','','',''],
+      ['Fecha', 'Insumo solicitado', 'Cantidad', 'Observaciones'],
+      ['2026-05-28', 'Papel Higiénico', '24 Pzas', 'Entrega ventanilla'],
+      ['2026-05-27', 'Cloro Líquido', '2 L', 'Uso inmediato'],
+      ['2026-05-24', 'Jabón Líquido', '5 Pzas', '—'],
+      ['','','',''],
+      ['Resumen','','',''],
+      ['Total solicitudes', usr.solicitudes, '', ''],
+      ['Insumos distintos', 12, '', ''],
+      ['Promedio por solicitud', '3.2 unidades', '', ''],
+    ];
+  } else {
+    title = `Reporte_General_${period}`;
+    rows = [
+      ['FacAdmin — Reporte General', '', '', '', ''],
+      ['Período:', period, 'Desde:', dateFrom, 'Hasta:', dateTo],
+      ['','','','',''],
+      ['ID', 'Insumo', 'Categoría', 'Stock actual', 'Salidas período', 'Estado'],
+      ...insumos.map(i => [
+        `#${i.id}`, i.nombre, i.cat, `${i.stock} ${i.unidad}`,
+        Math.floor(Math.random()*50+5),
+        i.state === 'ok' ? 'Normal' : i.state === 'mid' ? 'Moderado' : 'Stock Bajo'
+      ]),
+      ['','','','',''],
+      ['Usuarios — Top solicitudes', '', '', '',''],
+      ['Usuario', 'Departamento', 'Solicitudes', 'Insumos distintos',''],
+      ...usuarios.map(u => [u.nombre, u.dept, u.solicitudes, 8, '']),
+    ];
+  }
+
+  // Convert to CSV and download (real file download)
+  const csv = rows.map(r => r.map(cell => `"${String(cell).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const BOM = '\uFEFF'; // UTF-8 BOM for Excel compatibility
+  const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${title}_${period}_${dateFrom}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  showToast('¡Excel descargado!', `${title.replace(/_/g,' ')} · ${period}`, true);
 }
 
 // ── RUN ───────────────────────────────────
