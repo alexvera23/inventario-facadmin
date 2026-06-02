@@ -1,0 +1,1263 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FacAdmin — Inventario BUAP</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    /* Fondos */
+    --bg-app: #FFFFFF;
+    --bg-card: #F8FAFC;
+    --bg-sidebar: #F1F5F9;
+    --bg-header: #FFFFFF;
+
+    /* Textos */
+    --text-primary: #002D4C;
+    --text-secondary: #475569;
+    --text-muted: #94A3B8;
+
+    /* Bordes */
+    --border: #E2E8F0;
+
+    /* Color principal */
+    --accent: #00B3E1;
+    --accent-glow: rgba(0, 179, 225, 0.10);
+    --accent-glow-strong: rgba(0, 179, 225, 0.20);
+
+    /* Sidebar */
+    --sidebar-text: #002D4C;
+    --sidebar-active-bg: rgba(0, 179, 225, 0.10);
+    --sidebar-hover-bg: rgba(0, 45, 76, 0.04);
+
+    /* Tablas e inputs */
+    --table-hover: #F1F5F9;
+    --input-bg: #F8FAFC;
+
+    /* Mantener igual */
+    --badge-low-bg: #FEF2F2;
+    --badge-low-text: #DC2626;
+
+    --badge-ok-bg: #F0FDF4;
+    --badge-ok-text: #16A34A;
+
+    --badge-mid-bg: #FFFBEB;
+    --badge-mid-text: #D97706;
+
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-drawer: -8px 0 40px rgba(0,0,0,0.12);
+}
+  [data-theme="dark"] {
+    --bg-app: #0F172A;
+    --bg-card: #1E293B;
+    --bg-sidebar: #0B132B;
+    --bg-header: #1E293B;
+    --text-primary: #E2E8F0;
+    --text-secondary: #94A3B8;
+    --text-muted: #475569;
+    --border: #334155;
+    --accent: #00D4FF;
+    --accent-glow: rgba(0,212,255,0.12);
+    --accent-glow-strong: rgba(0,212,255,0.2);
+    --sidebar-text: rgba(255,255,255,0.55);
+    --sidebar-active-bg: rgba(0,212,255,0.15);
+    --sidebar-hover-bg: rgba(255,255,255,0.04);
+    --table-hover: #263348;
+    --input-bg: #0F172A;
+    --badge-low-bg: rgba(220,38,38,0.15); --badge-low-text: #F87171;
+    --badge-ok-bg: rgba(22,163,74,0.15); --badge-ok-text: #4ADE80;
+    --badge-mid-bg: rgba(217,119,6,0.15); --badge-mid-text: #FCD34D;
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.3);
+    --shadow-drawer: -8px 0 40px rgba(0,0,0,0.5);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Manrope', sans-serif; background: var(--bg-app); color: var(--text-primary); overflow: hidden; height: 100vh; display: flex; transition: background 0.3s, color 0.3s; }
+  h1,h2,h3,h4 { font-family: 'Syne', sans-serif; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+  /* ── SIDEBAR ── */
+  #sidebar { width: 240px; background: var(--bg-sidebar); flex-shrink: 0; display: flex; flex-direction: column; transition: transform 0.3s cubic-bezier(.4,0,.2,1); z-index: 50; }
+  @media(max-width:1023px){ #sidebar { position: fixed; inset-y:0; left:0; transform: translateX(-100%); } #sidebar.open { transform: translateX(0); } }
+
+  /* ── NAV LINKS ── */
+  .nav-link { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 10px; color: var(--sidebar-text); font-size: 0.875rem; font-weight: 600; transition: all 0.2s; cursor: pointer; border: none; background: transparent; width: 100%; text-align: left; }
+  .nav-link:hover { background: var(--sidebar-hover-bg); color: #fff; }
+  .nav-link.active { background: var(--sidebar-active-bg); color: var(--accent); border: 1px solid rgba(0,179,225,0.3); }
+  .nav-link .nav-icon { width:18px; height:18px; flex-shrink:0; }
+
+  /* ── HEADER ── */
+  #header { height: 60px; background: var(--bg-header); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 24px; gap: 16px; transition: background 0.3s, border-color 0.3s; }
+
+  /* ── SEARCH ── */
+  .search-input { background: var(--input-bg); border: 1.5px solid var(--border); border-radius: 10px; padding: 7px 14px 7px 36px; font-size: 0.8rem; color: var(--text-primary); font-family: 'Manrope',sans-serif; outline: none; width: 240px; transition: border-color 0.2s, box-shadow 0.2s; }
+  .search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+  .search-input::placeholder { color: var(--text-muted); }
+
+  /* ── ICON BUTTON ── */
+  .icon-btn { width:34px; height:34px; display:flex; align-items:center; justify-content:center; border-radius:8px; background: var(--input-bg); border: 1px solid var(--border); cursor:pointer; transition: all 0.2s; color: var(--text-secondary); }
+  .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ── MAIN CONTENT ── */
+  #main-content { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+  .view { display: none; flex: 1; overflow-y: auto; padding: 24px; flex-direction: column; gap: 20px; }
+  .view.active { display: flex; }
+
+  /* ── CARD ── */
+  .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-card); overflow: hidden; transition: background 0.3s, border-color 0.3s; }
+
+  /* ── TABLE ── */
+  table { width: 100%; border-collapse: collapse; }
+  thead tr { border-bottom: 1px solid var(--border); }
+  th { padding: 12px 16px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); text-align: left; font-family: 'Syne',sans-serif; background: var(--bg-app); }
+  td { padding: 14px 16px; font-size: 0.875rem; border-bottom: 1px solid var(--border); }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr { cursor: pointer; transition: background 0.15s; }
+  tbody tr:hover { background: var(--table-hover); }
+  tbody tr:hover td { color: var(--text-primary); }
+
+  /* ── BADGE ── */
+  .badge { display:inline-flex; align-items:center; gap:5px; padding: 3px 10px; border-radius:99px; font-size:0.7rem; font-weight:700; font-family:'Syne',sans-serif; }
+  .badge-ok { background: var(--badge-ok-bg); color: var(--badge-ok-text); }
+  .badge-low { background: var(--badge-low-bg); color: var(--badge-low-text); }
+  .badge-mid { background: var(--badge-mid-bg); color: var(--badge-mid-text); }
+
+  /* ── DRAWER ── */
+  #detail-drawer { position:fixed; inset-y:0; right:0; z-index:60; width:100%; max-width:420px; background:var(--bg-card); border-left:1px solid var(--border); box-shadow:var(--shadow-drawer); transform:translateX(100%); transition:transform 0.3s cubic-bezier(.4,0,.2,1); display:flex; flex-direction:column; }
+  #detail-drawer.open { transform:translateX(0); }
+  #drawer-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:59; display:none; backdrop-filter:blur(2px); }
+  #drawer-overlay.open { display:block; }
+
+  /* ── VENTANILLA SPLIT ── */
+  .split-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; flex: 1; min-height: 0; }
+  @media(max-width:767px){ .split-panel { grid-template-columns: 1fr; overflow-y: auto; } }
+  .split-left, .split-right { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow-card); }
+
+  /* ── STEP INDICATOR ── */
+  .step-badge { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:99px; background:var(--accent); color:#fff; font-size:0.65rem; font-weight:800; font-family:'Syne',sans-serif; flex-shrink:0; }
+
+  /* ── INSUMO LIST ITEM ── */
+  .insumo-item { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-radius:10px; cursor:pointer; transition:background 0.15s; border: 1px solid transparent; }
+  .insumo-item:hover { background:var(--accent-glow); border-color:var(--accent-glow-strong); }
+  .insumo-item.selected { background:var(--accent-glow-strong); border-color:var(--accent); }
+
+  /* ── CONFIRM BUTTON ── */
+  .btn-confirm { background: var(--accent); color: #002D4C; font-family:'Syne',sans-serif; font-weight:800; font-size:1rem; border:none; border-radius:12px; padding:16px; width:100%; cursor:pointer; transition:all 0.2s; letter-spacing:0.02em; }
+  .btn-confirm:hover { filter:brightness(1.1); transform:translateY(-1px); box-shadow: 0 6px 20px var(--accent-glow-strong); }
+  .btn-confirm:active { transform:translateY(0); }
+
+  /* ── SECONDARY BTN ── */
+  .btn-secondary { background: transparent; color: var(--text-secondary); font-family:'Syne',sans-serif; font-weight:700; font-size:0.8rem; border:1.5px solid var(--border); border-radius:10px; padding:9px 16px; cursor:pointer; transition:all 0.2s; }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+  .btn-primary { background: var(--text-primary); color: var(--bg-app); font-family:'Syne',sans-serif; font-weight:700; font-size:0.8rem; border:none; border-radius:10px; padding:9px 16px; cursor:pointer; transition:all 0.2s; }
+  [data-theme="dark"] .btn-primary { background: var(--accent); color: #002D4C; }
+  .btn-primary:hover { opacity:0.85; }
+
+  /* ── AVATAR ── */
+  .avatar { width:34px; height:34px; border-radius:50%; background:var(--accent); color:#002D4C; font-family:'Syne',sans-serif; font-weight:800; font-size:0.8rem; display:flex; align-items:center; justify-content:center; cursor:pointer; position:relative; flex-shrink:0; }
+
+  /* ── PROFILE DROPDOWN ── */
+  #profile-dropdown { position:absolute; top:calc(100% + 10px); right:0; width:200px; background:var(--bg-card); border:1px solid var(--border); border-radius:12px; box-shadow: 0 8px 30px rgba(0,0,0,0.15); padding:8px; display:none; z-index:100; }
+  #profile-dropdown.open { display:block; }
+
+  /* ── TOAST ── */
+  #toast { position:fixed; bottom:24px; right:24px; background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:14px 18px; display:flex; align-items:center; gap:10px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); z-index:999; transform:translateY(20px); opacity:0; transition:all 0.35s cubic-bezier(.4,0,.2,1); pointer-events:none; }
+  #toast.show { transform:translateY(0); opacity:1; }
+
+  /* ── STAT CARD ── */
+  .stat-card { background:var(--bg-card); border:1px solid var(--border); border-radius:14px; padding:20px; display:flex; flex-direction:column; gap:6px; box-shadow:var(--shadow-card); transition:background 0.3s, border 0.3s; }
+  .stat-value { font-family:'Syne',sans-serif; font-size:1.8rem; font-weight:800; color:var(--accent); }
+  .stat-label { font-size:0.75rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em; }
+
+  /* ── MOBILE OVERLAY (sidebar) ── */
+  #mobile-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:49; display:none; }
+  #mobile-overlay.open { display:block; }
+
+  /* ── REPORT CHART CONTAINER ── */
+  .chart-wrap { position:relative; width:100%; }
+
+  /* ── SOLICITANTE CARD ── */
+  .solicitante-card { background:var(--accent-glow); border:1.5px solid var(--accent); border-radius:12px; padding:12px 14px; display:flex; align-items:center; gap:12px; }
+
+  /* ── BANDEJA ITEM ── */
+  .bandeja-item { display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border); }
+  .bandeja-item:last-child { border-bottom:none; }
+
+  /* ── INPUT FIELD ── */
+  .field { background:var(--input-bg); border:1.5px solid var(--border); border-radius:10px; padding:9px 13px; font-size:0.875rem; color:var(--text-primary); font-family:'Manrope',sans-serif; outline:none; width:100%; transition:border 0.2s, box-shadow 0.2s; }
+  .field:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-glow); }
+  .field::placeholder { color:var(--text-muted); }
+
+  /* ── SELECT ── */
+  select.field { appearance:none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 10px center; background-size:16px; padding-right:32px; }
+
+  /* ── QTY INPUT ── */
+  .qty-row { display:flex; align-items:center; gap:8px; }
+  .qty-btn { width:30px; height:30px; border-radius:8px; border:1.5px solid var(--border); background:var(--input-bg); color:var(--text-primary); font-size:1rem; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.15s; }
+  .qty-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .qty-input { width:64px; text-align:center; }
+
+  /* ── SECTION HEADER ── */
+  .section-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+
+  /* ── MOVEMENT ITEM ── */
+  .movement-item { display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--border); }
+  .movement-item:last-child { border-bottom:none; }
+  .mov-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+
+  /* ── GLOW ACCENT NUMBERS ── */
+  .text-accent { color: var(--accent); }
+  [data-theme="dark"] .text-accent { text-shadow: 0 0 12px var(--accent-glow-strong); }
+
+  /* ── TRANSITION HELPERS ── */
+  .t { transition: background 0.3s, border-color 0.3s, color 0.2s; }
+
+  /* ── SEARCH RESULT ROW ── */
+  .search-result-row { display:flex; align-items:center; gap:10px; padding:10px 14px; cursor:pointer; border-radius:8px; transition:background 0.15s; }
+  .search-result-row:hover { background:var(--accent-glow); }
+
+  /* ── USUARIO AVATAR LARGE ── */
+  .user-avatar-lg { width:46px; height:46px; border-radius:50%; background:linear-gradient(135deg, var(--accent), #0078A0); color:#fff; font-family:'Syne',sans-serif; font-weight:800; font-size:1rem; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+
+  /* ── REPORT KPI ── */
+  .kpi-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:16px; }
+
+  /* ── SCROLLABLE PANEL ── */
+  .scroll-panel { overflow-y:auto; flex:1; }
+
+  /* pulse animation for confirm btn */
+  @keyframes pulse-glow { 0%,100%{box-shadow:0 0 0 0 var(--accent-glow-strong)} 50%{box-shadow:0 0 0 8px transparent} }
+  .btn-confirm:not(:hover) { animation: pulse-glow 2.5s ease infinite; }
+</style>
+</head>
+<body>
+
+<!-- Mobile Sidebar Overlay -->
+<div id="mobile-overlay" onclick="closeSidebar()"></div>
+
+<!-- ═══════════════════════════════════════════
+     SIDEBAR
+═══════════════════════════════════════════ -->
+<aside id="sidebar">
+  <!-- Logo -->
+  <div style="padding:22px 20px 18px; border-bottom:1px solid rgba(255,255,255,0.08);">
+    <h1 style="font-family:'Syne',sans-serif; font-size:1.35rem; font-weight:800; color:#fff; letter-spacing:-0.02em;">
+      Fac<span style="color:var(--accent);">Admin</span>
+    </h1>
+    <p style="font-size:0.7rem; color:rgba(255,255,255,0.35); margin-top:2px; font-weight:600; letter-spacing:0.05em;">INVENTARIO BUAP</p>
+  </div>
+
+  <!-- Nav -->
+  <nav style="flex:1; padding:16px 12px; display:flex; flex-direction:column; gap:4px; overflow-y:auto;">
+    <p style="font-size:0.6rem; font-weight:700; letter-spacing:0.1em; color:rgba(255,255,255,0.25); padding:0 6px; margin-bottom:4px; font-family:'Syne',sans-serif;">MÓDULOS</p>
+
+    <button class="nav-link active" onclick="switchView('catalogo', this)" data-view="catalogo">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 10V7"/></svg>
+      Catálogo
+    </button>
+    <button class="nav-link" onclick="switchView('ventanilla', this)" data-view="ventanilla">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+      Ventanilla E/S
+    </button>
+    <button class="nav-link" onclick="switchView('usuarios', this)" data-view="usuarios">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+      Usuarios
+    </button>
+    <button class="nav-link" onclick="switchView('reportes', this)" data-view="reportes">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      Reportes
+    </button>
+  </nav>
+
+  <!-- User bottom -->
+  <div style="padding:14px 16px; border-top:1px solid rgba(255,255,255,0.08); display:flex; align-items:center; gap:10px;">
+    <div style="width:34px;height:34px;border-radius:50%;background:var(--accent);color:#002D4C;font-family:'Syne',sans-serif;font-weight:800;font-size:0.75rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;">JG</div>
+    <div style="flex:1;min-width:0;">
+      <p style="font-size:0.8rem;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">J. González</p>
+      <p style="font-size:0.65rem;color:rgba(255,255,255,0.35);font-weight:500;">Administrador</p>
+    </div>
+    <button onclick="logOut()" style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.3);transition:color 0.2s;" title="Cerrar sesión">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+    </button>
+  </div>
+</aside>
+
+<!-- ═══════════════════════════════════════════
+     MAIN
+═══════════════════════════════════════════ -->
+<div id="main-content">
+
+  <!-- HEADER -->
+  <header id="header">
+    <!-- Hamburger (mobile) -->
+    <button onclick="openSidebar()" style="display:none;background:none;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;" id="hamburger-btn">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+
+    <!-- Breadcrumb -->
+    <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;">
+      <span id="breadcrumb-module" style="font-family:'Syne',sans-serif;font-size:0.85rem;font-weight:700;color:var(--text-primary);">Catálogo</span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--text-muted);"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+      <span id="breadcrumb-sub" style="font-size:0.8rem;color:var(--text-muted);font-weight:600;">Insumos</span>
+    </div>
+
+    <!-- Search -->
+    <div style="position:relative;flex-shrink:0;" class="search-container">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none;">
+        <circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="M21 21l-4.35-4.35"/>
+      </svg>
+      <input type="text" class="search-input" placeholder="ID o nombre..." id="global-search">
+    </div>
+
+    <!-- Theme toggle -->
+    <button class="icon-btn" onclick="toggleTheme()" title="Cambiar tema">
+      <svg id="theme-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+      </svg>
+    </button>
+
+    <!-- Profile -->
+    <div style="position:relative;">
+      <div class="avatar" onclick="toggleProfileMenu()">JG</div>
+      <div id="profile-dropdown">
+        <div style="padding:8px 10px 12px; border-bottom:1px solid var(--border); margin-bottom:8px;">
+          <p style="font-size:0.85rem;font-weight:700;color:var(--text-primary);font-family:'Syne',sans-serif;">J. González</p>
+          <p style="font-size:0.7rem;color:var(--text-muted);">Administrador General</p>
+        </div>
+        <button onclick="logOut()" style="display:flex;align-items:center;gap:8px;padding:8px 10px;width:100%;background:none;border:none;cursor:pointer;color:var(--text-secondary);font-size:0.8rem;font-family:'Manrope',sans-serif;border-radius:6px;transition:background 0.15s;" onmouseenter="this.style.background='var(--accent-glow)'" onmouseleave="this.style.background='none'">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+          Cerrar sesión
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ─────────────────────────────────────────
+       VIEW: CATÁLOGO
+  ───────────────────────────────────────── -->
+  <div id="view-catalogo" class="view active">
+
+    <!-- Top bar -->
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+      <div>
+        <h2 style="font-size:1.15rem;font-weight:800;font-family:'Syne',sans-serif;">Catálogo de Insumos</h2>
+        <p style="font-size:0.8rem;color:var(--text-muted);margin-top:2px;">12 productos registrados · 2 con stock bajo</p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <select class="field" style="width:auto;font-size:0.8rem;padding:7px 30px 7px 12px;">
+          <option>Todos</option>
+          <option>Limpieza</option>
+          <option>Higiene</option>
+          <option>Oficina</option>
+        </select>
+        <button class="btn-primary" style="display:flex;align-items:center;gap:6px;white-space:nowrap;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+          Nuevo Insumo
+        </button>
+      </div>
+    </div>
+
+    <!-- Table card -->
+    <div class="card" style="overflow:hidden;">
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Producto</th>
+              <th class="hide-mobile">Categoría</th>
+              <th class="hide-mobile">Unidad</th>
+              <th style="text-align:right;">Stock Actual</th>
+              <th style="text-align:center;">Estado</th>
+            </tr>
+          </thead>
+          <tbody id="catalog-tbody">
+            <!-- JS-rendered -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────
+       VIEW: VENTANILLA
+  ───────────────────────────────────────── -->
+  <div id="view-ventanilla" class="view">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+      <div>
+        <h2 style="font-size:1.15rem;font-weight:800;font-family:'Syne',sans-serif;">Ventanilla de Entrega</h2>
+        <p style="font-size:0.8rem;color:var(--text-muted);margin-top:2px;">Registra salidas de insumos en 3 pasos</p>
+      </div>
+      <div class="badge badge-ok" style="font-size:0.7rem;">
+        <span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;"></span>
+        Sistema en línea
+      </div>
+    </div>
+
+    <div class="split-panel">
+      <!-- LEFT PANEL -->
+      <div class="split-left">
+        <div style="padding:18px 18px 14px;border-bottom:1px solid var(--border);">
+          <p style="font-size:0.65rem;font-weight:700;letter-spacing:0.08em;color:var(--text-muted);font-family:'Syne',sans-serif;margin-bottom:12px;">PASO 1 · SOLICITANTE</p>
+          <div style="position:relative;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none;"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="M21 21l-4.35-4.35"/></svg>
+            <input type="text" class="field" style="padding-left:32px;" placeholder="Buscar nombre o clave..." id="search-solicitante" oninput="filterSolicitantes(this.value)">
+          </div>
+
+          <!-- Results -->
+          <div id="solicitante-results" style="margin-top:10px;border-radius:10px;border:1px solid var(--border);overflow:hidden;display:none;max-height:150px;overflow-y:auto;">
+            <!-- JS rendered -->
+          </div>
+
+          <!-- Selected solicitante card -->
+          <div id="solicitante-card" style="display:none;margin-top:12px;" class="solicitante-card">
+            <div class="user-avatar-lg" id="sol-avatar">DR</div>
+            <div>
+              <p id="sol-name" style="font-weight:700;font-size:0.9rem;color:var(--text-primary);">Don Roque</p>
+              <p id="sol-dept" style="font-size:0.75rem;color:var(--text-secondary);">Intendencia · Edificio 3</p>
+              <span class="badge badge-ok" style="margin-top:4px;font-size:0.6rem;">✓ Identidad verificada</span>
+            </div>
+            <button onclick="clearSolicitante()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--text-muted);">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div style="padding:16px 18px 14px;border-bottom:1px solid var(--border);">
+          <p style="font-size:0.65rem;font-weight:700;letter-spacing:0.08em;color:var(--text-muted);font-family:'Syne',sans-serif;margin-bottom:12px;">PASO 2 · INSUMO</p>
+          <div style="position:relative;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none;"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 10V7"/></svg>
+            <input type="text" class="field" style="padding-left:32px;" placeholder="Buscar insumo..." id="search-insumo" oninput="filterInsumos(this.value)">
+          </div>
+          <div id="insumo-results" style="margin-top:10px;max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;">
+            <!-- JS rendered -->
+          </div>
+        </div>
+
+        <!-- Quantity and packaging selector -->
+        <div id="qty-section" style="padding:16px 18px;display:none;border-bottom:1px solid var(--border);">
+          <p style="font-size:0.65rem;font-weight:700;letter-spacing:0.08em;color:var(--text-muted);font-family:'Syne',sans-serif;margin-bottom:10px;">CANTIDAD Y EMBALAJE</p>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <div class="qty-row">
+              <button class="qty-btn" onclick="changeQty(-1)">−</button>
+              <input type="number" id="qty-input" class="field qty-input" value="1" min="1">
+              <button class="qty-btn" onclick="changeQty(1)">+</button>
+            </div>
+            <select id="embalaje-select" class="field" style="flex:1;min-width:140px;font-size:0.8rem;">
+              <option value="1">Piezas sueltas (×1)</option>
+              <option value="48">Caja (×48 piezas)</option>
+              <option value="12">Paquete (×12)</option>
+            </select>
+            <button class="btn-primary" onclick="addToBandeja()" style="white-space:nowrap;">
+              + Agregar
+            </button>
+          </div>
+          <p id="insumo-selected-label" style="font-size:0.75rem;color:var(--text-muted);margin-top:8px;"></p>
+        </div>
+      </div>
+
+      <!-- RIGHT PANEL -->
+      <div class="split-right">
+        <div style="padding:18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <p style="font-size:0.65rem;font-weight:700;letter-spacing:0.08em;color:var(--text-muted);font-family:'Syne',sans-serif;">PASO 3 · BANDEJA DE SALIDA</p>
+            <p id="bandeja-count" style="font-size:0.8rem;color:var(--text-secondary);margin-top:2px;">0 productos agregados</p>
+          </div>
+          <button onclick="clearBandeja()" style="background:none;border:none;cursor:pointer;font-size:0.75rem;color:var(--text-muted);font-family:'Manrope',sans-serif;" id="clear-bandeja-btn">Limpiar</button>
+        </div>
+
+        <div class="scroll-panel" style="padding:16px 18px;">
+          <div id="bandeja-list" style="display:flex;flex-direction:column;">
+            <div id="bandeja-empty" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;color:var(--text-muted);text-align:center;">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:12px;opacity:0.4;"><path stroke-linecap="round" stroke-linejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
+              <p style="font-size:0.85rem;font-weight:600;">Bandeja vacía</p>
+              <p style="font-size:0.75rem;margin-top:4px;">Agrega productos desde el panel izquierdo</p>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding:16px 18px;border-top:1px solid var(--border);background:var(--bg-app);">
+          <div style="margin-bottom:10px;">
+            <textarea class="field" placeholder="Observaciones (opcional)..." rows="2" style="resize:none;font-size:0.8rem;" id="obs-field"></textarea>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+            <span style="font-size:0.8rem;color:var(--text-muted);font-weight:600;">Total de unidades:</span>
+            <span id="total-units" style="font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:1rem;color:var(--accent);">0</span>
+          </div>
+          <button class="btn-confirm" onclick="confirmDelivery()">⚡ CONFIRMAR ENTREGA</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────
+       VIEW: USUARIOS
+  ───────────────────────────────────────── -->
+  <div id="view-usuarios" class="view">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+      <div>
+        <h2 style="font-size:1.15rem;font-weight:800;font-family:'Syne',sans-serif;">Usuarios / Solicitantes</h2>
+        <p style="font-size:0.8rem;color:var(--text-muted);margin-top:2px;">8 usuarios registrados · Personal activo</p>
+      </div>
+      <button class="btn-primary" style="display:flex;align-items:center;gap:6px;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+        Nuevo Usuario
+      </button>
+    </div>
+
+    <div class="card">
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Usuario</th>
+              <th class="hide-mobile">Departamento</th>
+              <th class="hide-mobile">Edificio</th>
+              <th style="text-align:center;">Solicitudes (mes)</th>
+              <th style="text-align:center;">Estado</th>
+            </tr>
+          </thead>
+          <tbody id="users-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────
+       VIEW: REPORTES
+  ───────────────────────────────────────── -->
+  <div id="view-reportes" class="view">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+      <div>
+        <h2 style="font-size:1.15rem;font-weight:800;font-family:'Syne',sans-serif;">Reportes y Analytics</h2>
+        <p style="font-size:0.8rem;color:var(--text-muted);margin-top:2px;">Vista general del período · Mayo 2026</p>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <select class="field" style="width:auto;font-size:0.8rem;padding:7px 30px 7px 12px;">
+          <option>Mayo 2026</option>
+          <option>Abril 2026</option>
+          <option>Marzo 2026</option>
+        </select>
+        <button class="btn-secondary" style="display:flex;align-items:center;gap:6px;white-space:nowrap;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          Exportar PDF
+        </button>
+      </div>
+    </div>
+
+    <!-- KPI Row -->
+    <div class="kpi-grid">
+      <div class="stat-card">
+        <div class="stat-label">Salidas del mes</div>
+        <div class="stat-value">347</div>
+        <div style="font-size:0.75rem;color:var(--badge-ok-text);font-weight:600;">↑ 12% vs. mes anterior</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Insumos activos</div>
+        <div class="stat-value">12</div>
+        <div style="font-size:0.75rem;color:var(--text-muted);font-weight:600;">2 con stock crítico</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Usuario top</div>
+        <div class="stat-value" style="font-size:1.1rem;padding-top:4px;">Don Roque</div>
+        <div style="font-size:0.75rem;color:var(--text-muted);font-weight:600;">48 solicitudes</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Insumo + demandado</div>
+        <div class="stat-value" style="font-size:1.1rem;padding-top:4px;">Papel Higiénico</div>
+        <div style="font-size:0.75rem;color:var(--text-muted);font-weight:600;">120 salidas</div>
+      </div>
+    </div>
+
+    <!-- Charts Grid -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;" id="charts-grid">
+      <!-- Chart 1: Consumo semanal -->
+      <div class="card" style="padding:20px;">
+        <h4 style="font-family:'Syne',sans-serif;font-size:0.85rem;font-weight:700;margin-bottom:4px;">Consumo Semanal</h4>
+        <p style="font-size:0.72rem;color:var(--text-muted);margin-bottom:16px;">Salidas de los últimos 30 días</p>
+        <div class="chart-wrap" style="height:180px;">
+          <canvas id="chart-consumo"></canvas>
+        </div>
+      </div>
+      <!-- Chart 2: Top insumos -->
+      <div class="card" style="padding:20px;">
+        <h4 style="font-family:'Syne',sans-serif;font-size:0.85rem;font-weight:700;margin-bottom:4px;">Top 5 Insumos</h4>
+        <p style="font-size:0.72rem;color:var(--text-muted);margin-bottom:16px;">Por volumen de salidas</p>
+        <div class="chart-wrap" style="height:180px;">
+          <canvas id="chart-top"></canvas>
+        </div>
+      </div>
+      <!-- Chart 3: Nivel de stock -->
+      <div class="card" style="padding:20px;">
+        <h4 style="font-family:'Syne',sans-serif;font-size:0.85rem;font-weight:700;margin-bottom:4px;">Nivel de Stock Actual</h4>
+        <p style="font-size:0.72rem;color:var(--text-muted);margin-bottom:16px;">Porcentaje vs. capacidad máxima</p>
+        <div class="chart-wrap" style="height:180px;">
+          <canvas id="chart-stock"></canvas>
+        </div>
+      </div>
+      <!-- Chart 4: Solicitudes por departamento -->
+      <div class="card" style="padding:20px;">
+        <h4 style="font-family:'Syne',sans-serif;font-size:0.85rem;font-weight:700;margin-bottom:4px;">Solicitudes por Departamento</h4>
+        <p style="font-size:0.72rem;color:var(--text-muted);margin-bottom:16px;">Distribución del período</p>
+        <div class="chart-wrap" style="height:180px;">
+          <canvas id="chart-dept"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main-content -->
+
+<!-- ═══════════════════════════════════════════
+     DETAIL DRAWER (Catálogo)
+═══════════════════════════════════════════ -->
+<div id="drawer-overlay" onclick="closeDrawer()"></div>
+<aside id="detail-drawer">
+  <div style="padding:18px 20px;border-bottom:1px solid var(--border);background:var(--bg-app);display:flex;align-items:center;justify-content:space-between;">
+    <div>
+      <span id="d-category" style="font-size:0.65rem;font-weight:700;letter-spacing:0.08em;color:var(--text-muted);font-family:'Syne',sans-serif;">—</span>
+      <h3 id="d-name" style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.1rem;margin-top:2px;">Nombre</h3>
+    </div>
+    <button onclick="closeDrawer()" class="icon-btn">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>
+  </div>
+
+  <div class="scroll-panel" style="padding:20px;display:flex;flex-direction:column;gap:20px;">
+    <!-- Stock bar -->
+    <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:12px;padding:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <p style="font-size:0.75rem;color:var(--text-muted);font-weight:600;">Stock Físico Actual</p>
+        <span id="d-state-badge" class="badge badge-ok">Normal</span>
+      </div>
+      <p id="d-stock" class="text-accent" style="font-family:'Syne',sans-serif;font-weight:800;font-size:2rem;">—</p>
+      <div style="margin-top:10px;background:var(--border);border-radius:99px;height:6px;overflow:hidden;">
+        <div id="d-stock-bar" style="height:100%;border-radius:99px;background:var(--accent);transition:width 0.6s ease;width:70%;"></div>
+      </div>
+      <p style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;text-align:right;" id="d-stock-pct">70% de capacidad</p>
+    </div>
+
+    <!-- Mini stats -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:10px;padding:12px;">
+        <p style="font-size:0.65rem;color:var(--text-muted);font-weight:600;font-family:'Syne',sans-serif;text-transform:uppercase;letter-spacing:0.06em;">Salidas esta semana</p>
+        <p id="d-week-out" class="text-accent" style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.3rem;margin-top:4px;">24</p>
+      </div>
+      <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:10px;padding:12px;">
+        <p style="font-size:0.65rem;color:var(--text-muted);font-weight:600;font-family:'Syne',sans-serif;text-transform:uppercase;letter-spacing:0.06em;">Entradas este mes</p>
+        <p style="color:#4ADE80;font-family:'Syne',sans-serif;font-weight:800;font-size:1.3rem;margin-top:4px;" id="d-month-in">480</p>
+      </div>
+    </div>
+
+    <!-- Trend chart -->
+    <div>
+      <p style="font-size:0.7rem;font-weight:700;color:var(--text-muted);font-family:'Syne',sans-serif;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">Comportamiento del Stock (7 días)</p>
+      <div style="height:110px;position:relative;">
+        <canvas id="drawer-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- Movements -->
+    <div>
+      <p style="font-size:0.7rem;font-weight:700;color:var(--text-muted);font-family:'Syne',sans-serif;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">Últimos Movimientos</p>
+      <div id="d-movements">
+        <!-- JS rendered -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer actions -->
+  <div style="padding:16px 20px;border-top:1px solid var(--border);background:var(--bg-app);display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+    <button class="btn-secondary" style="font-size:0.75rem;padding:8px 6px;">Ajuste manual</button>
+    <button class="btn-secondary" style="font-size:0.75rem;padding:8px 6px;">Entrada emergencia</button>
+    <button class="btn-primary" style="font-size:0.75rem;padding:8px 6px;">Abastecer</button>
+  </div>
+</aside>
+
+<!-- User Drawer (Usuarios view) -->
+<aside id="user-drawer" style="position:fixed;inset-y:0;right:0;z-index:60;width:100%;max-width:380px;background:var(--bg-card);border-left:1px solid var(--border);box-shadow:var(--shadow-drawer);transform:translateX(100%);transition:transform 0.3s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;">
+  <div style="padding:18px 20px;border-bottom:1px solid var(--border);background:var(--bg-app);display:flex;align-items:center;justify-content:space-between;">
+    <h3 style="font-family:'Syne',sans-serif;font-weight:800;font-size:1rem;">Detalle de Usuario</h3>
+    <button onclick="closeUserDrawer()" class="icon-btn">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div class="scroll-panel" style="padding:20px;display:flex;flex-direction:column;gap:16px;">
+    <div style="display:flex;align-items:center;gap:14px;">
+      <div class="user-avatar-lg" id="ud-avatar" style="width:56px;height:56px;font-size:1.2rem;">DR</div>
+      <div>
+        <p id="ud-name" style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.1rem;">—</p>
+        <p id="ud-dept" style="font-size:0.8rem;color:var(--text-muted);">—</p>
+        <span class="badge badge-ok" style="margin-top:6px;">Activo</span>
+      </div>
+    </div>
+    <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;justify-content:space-between;">
+      <div style="text-align:center;">
+        <p style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.4rem;color:var(--accent);" id="ud-total">48</p>
+        <p style="font-size:0.65rem;color:var(--text-muted);font-weight:600;margin-top:2px;">TOTAL MES</p>
+      </div>
+      <div style="text-align:center;">
+        <p style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.4rem;color:#4ADE80;">3</p>
+        <p style="font-size:0.65rem;color:var(--text-muted);font-weight:600;margin-top:2px;">ESTA SEMANA</p>
+      </div>
+      <div style="text-align:center;">
+        <p style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.4rem;color:var(--text-secondary);">12</p>
+        <p style="font-size:0.65rem;color:var(--text-muted);font-weight:600;margin-top:2px;">INSUMOS DIST.</p>
+      </div>
+    </div>
+    <div>
+      <p style="font-size:0.7rem;font-weight:700;color:var(--text-muted);font-family:'Syne',sans-serif;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">Historial reciente</p>
+      <div style="display:flex;flex-direction:column;gap:0;">
+        <div class="movement-item"><div class="mov-dot" style="background:#EF4444;"></div><div style="flex:1;"><p style="font-size:0.8rem;font-weight:600;">Papel higiénico</p><p style="font-size:0.7rem;color:var(--text-muted);">Hace 2 horas · Ventanilla</p></div><span style="font-size:0.8rem;font-weight:700;color:#EF4444;">−24 Pzas</span></div>
+        <div class="movement-item"><div class="mov-dot" style="background:#EF4444;"></div><div style="flex:1;"><p style="font-size:0.8rem;font-weight:600;">Cloro Líquido</p><p style="font-size:0.7rem;color:var(--text-muted);">Hace 1 día · Ventanilla</p></div><span style="font-size:0.8rem;font-weight:700;color:#EF4444;">−2 L</span></div>
+        <div class="movement-item"><div class="mov-dot" style="background:#EF4444;"></div><div style="flex:1;"><p style="font-size:0.8rem;font-weight:600;">Jabón líquido</p><p style="font-size:0.7rem;color:var(--text-muted);">Hace 3 días · Ventanilla</p></div><span style="font-size:0.8rem;font-weight:700;color:#EF4444;">−5 Pzas</span></div>
+      </div>
+    </div>
+  </div>
+  <div style="padding:14px 20px;border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+    <button class="btn-secondary">Editar usuario</button>
+    <button class="btn-primary">Ver historial completo</button>
+  </div>
+</aside>
+
+<!-- ═══════════════════════════════════════════
+     TOAST
+═══════════════════════════════════════════ -->
+<div id="toast">
+  <svg id="toast-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+  <div>
+    <p id="toast-title" style="font-size:0.85rem;font-weight:700;font-family:'Syne',sans-serif;">Entrega confirmada</p>
+    <p id="toast-msg" style="font-size:0.75rem;color:var(--text-muted);">Inventario actualizado</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     RESPONSIVE STYLES
+═══════════════════════════════════════════ -->
+<style>
+@media(max-width:1023px){
+  #hamburger-btn { display:flex !important; }
+  .search-container { display:none; }
+}
+@media(max-width:767px){
+  .hide-mobile { display:none !important; }
+  #charts-grid { grid-template-columns:1fr !important; }
+}
+</style>
+
+<!-- ═══════════════════════════════════════════
+     JAVASCRIPT
+═══════════════════════════════════════════ -->
+<script>
+// ── DATA ──────────────────────────────────
+const insumos = [
+  { id:'001', nombre:'Cloro Líquido Concentrado', cat:'Limpieza', unidad:'L', stock:12, max:50, state:'low' },
+  { id:'002', nombre:'Papel Higiénico Institucional', cat:'Higiene', unidad:'Pzas', stock:480, max:600, state:'ok' },
+  { id:'003', nombre:'Jabón Líquido Antibacterial', cat:'Higiene', unidad:'L', stock:8.5, max:30, state:'low' },
+  { id:'004', nombre:'Bolsas de Basura 200L', cat:'Limpieza', unidad:'Pzas', stock:350, max:500, state:'ok' },
+  { id:'005', nombre:'Desinfectante Multiusos', cat:'Limpieza', unidad:'L', stock:22, max:40, state:'mid' },
+  { id:'006', nombre:'Papel para impresora A4', cat:'Oficina', unidad:'Resmas', stock:90, max:120, state:'ok' },
+  { id:'007', nombre:'Servilletas de papel', cat:'Higiene', unidad:'Pzas', stock:1200, max:2000, state:'ok' },
+  { id:'008', nombre:'Escobas industriales', cat:'Limpieza', unidad:'Pzas', stock:4, max:20, state:'low' },
+];
+
+const usuarios = [
+  { id:'U01', initials:'DR', nombre:'Don Roque', dept:'Intendencia', edificio:'Edificio 3', solicitudes:48, activo:true },
+  { id:'U02', initials:'MG', nombre:'María García', dept:'Secretaría', edificio:'Rectoría', solicitudes:22, activo:true },
+  { id:'U03', initials:'JL', nombre:'José López', dept:'Laboratorios', edificio:'Edificio 5', solicitudes:35, activo:true },
+  { id:'U04', initials:'AL', nombre:'Ana Lara', dept:'Intendencia', edificio:'Edificio 1', solicitudes:61, activo:false },
+  { id:'U05', initials:'CR', nombre:'Carlos Ríos', dept:'Mantenimiento', edificio:'Planta Baja', solicitudes:17, activo:true },
+];
+
+const movimientosMock = [
+  { who:'Don Roque', time:'Hace 2 horas', tipo:'Salida a ventanilla', val:-2, color:'#EF4444' },
+  { who:'Ana Lara', time:'Hace 1 día', tipo:'Salida a ventanilla', val:-5, color:'#EF4444' },
+  { who:'Proveedor Externo', time:'Hace 3 días', tipo:'Surtido de almacén', val:50, color:'#4ADE80' },
+  { who:'Don Roque', time:'Hace 5 días', tipo:'Salida a ventanilla', val:-8, color:'#EF4444' },
+  { who:'J. González', time:'Hace 7 días', tipo:'Ajuste manual de inventario', val:2, color:'#F59E0B' },
+];
+
+// ── STATE ─────────────────────────────────
+let currentView = 'catalogo';
+let selectedSolicitante = null;
+let selectedInsumo = null;
+let bandeja = [];
+let drawerChart = null;
+let reportCharts = {};
+
+// ── INIT ──────────────────────────────────
+function init() {
+  renderCatalog();
+  renderUsers();
+  renderInsumoResults('');
+  handleResize();
+  window.addEventListener('resize', handleResize);
+  document.addEventListener('click', handleOutsideClick);
+}
+
+function handleResize() {
+  const w = window.innerWidth;
+  const sidebar = document.getElementById('sidebar');
+  if (w >= 1024) {
+    sidebar.classList.remove('open');
+    document.getElementById('mobile-overlay').classList.remove('open');
+  }
+}
+
+function handleOutsideClick(e) {
+  const dd = document.getElementById('profile-dropdown');
+  if (!e.target.closest('.avatar') && !e.target.closest('#profile-dropdown')) {
+    dd.classList.remove('open');
+  }
+}
+
+// ── THEME ─────────────────────────────────
+function toggleTheme() {
+  const html = document.documentElement;
+  const isDark = html.getAttribute('data-theme') === 'dark';
+  html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  const icon = document.getElementById('theme-icon');
+  if (isDark) {
+    icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>';
+  } else {
+    icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>';
+  }
+  // Update charts colors
+  if (reportCharts['consumo']) {
+    Object.values(reportCharts).forEach(c => { c.destroy && c.destroy(); });
+    reportCharts = {};
+    if (currentView === 'reportes') setTimeout(initReportCharts, 50);
+  }
+}
+
+// ── SIDEBAR ───────────────────────────────
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('mobile-overlay').classList.add('open');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('mobile-overlay').classList.remove('open');
+}
+
+// ── NAV ───────────────────────────────────
+const breadcrumbs = {
+  catalogo: ['Catálogo','Insumos'],
+  ventanilla: ['Ventanilla','Entrega E/S'],
+  usuarios: ['Usuarios','Solicitantes'],
+  reportes: ['Reportes','Analytics'],
+};
+
+function switchView(view, el) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+  document.getElementById('view-' + view).classList.add('active');
+  el.classList.add('active');
+  currentView = view;
+  const [mod, sub] = breadcrumbs[view];
+  document.getElementById('breadcrumb-module').textContent = mod;
+  document.getElementById('breadcrumb-sub').textContent = sub;
+  closeSidebar();
+  if (view === 'reportes') setTimeout(initReportCharts, 100);
+}
+
+// ── CATALOG RENDER ────────────────────────
+function stateInfo(s) {
+  if (s==='low') return {cls:'badge-low',label:'Stock Bajo'};
+  if (s==='mid') return {cls:'badge-mid',label:'Moderado'};
+  return {cls:'badge-ok',label:'Normal'};
+}
+
+function renderCatalog() {
+  const tb = document.getElementById('catalog-tbody');
+  tb.innerHTML = insumos.map(i => {
+    const si = stateInfo(i.state);
+    const pct = Math.round((i.stock/i.max)*100);
+    const color = i.state==='ok' ? '#00B3E1' : i.state==='mid' ? '#F59E0B' : '#EF4444';
+    return `<tr onclick="openDrawer('${i.id}')">
+      <td><span class="mono" style="font-size:0.78rem;color:var(--text-muted);">#${i.id}</span></td>
+      <td style="font-weight:700;">${i.nombre}</td>
+      <td class="hide-mobile" style="color:var(--text-secondary);font-size:0.83rem;">${i.cat}</td>
+      <td class="hide-mobile" style="color:var(--text-muted);font-size:0.8rem;">${i.unidad}</td>
+      <td style="text-align:right;">
+        <span class="mono" style="font-weight:800;color:${color};font-size:0.9rem;">${i.stock} ${i.unidad}</span>
+        <div style="margin-top:4px;background:var(--border);border-radius:99px;height:3px;overflow:hidden;"><div style="width:${pct}%;height:100%;background:${color};border-radius:99px;"></div></div>
+      </td>
+      <td style="text-align:center;"><span class="badge ${si.cls}">${si.label}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── DETAIL DRAWER ─────────────────────────
+function openDrawer(id) {
+  const ins = insumos.find(i => i.id === id);
+  if (!ins) return;
+  const si = stateInfo(ins.state);
+  const pct = Math.round((ins.stock/ins.max)*100);
+
+  document.getElementById('d-category').textContent = ins.cat.toUpperCase();
+  document.getElementById('d-name').textContent = ins.nombre;
+  document.getElementById('d-stock').textContent = `${ins.stock} ${ins.unidad}`;
+  document.getElementById('d-state-badge').className = `badge ${si.cls}`;
+  document.getElementById('d-state-badge').textContent = si.label;
+  document.getElementById('d-stock-bar').style.width = pct+'%';
+  document.getElementById('d-stock-bar').style.background = ins.state==='ok'?'var(--accent)':ins.state==='mid'?'#F59E0B':'#EF4444';
+  document.getElementById('d-stock-pct').textContent = pct + '% de capacidad';
+  document.getElementById('d-week-out').textContent = Math.floor(Math.random()*30+5);
+  document.getElementById('d-month-in').textContent = Math.floor(Math.random()*200+100);
+
+  // Movements
+  document.getElementById('d-movements').innerHTML = movimientosMock.map(m => `
+    <div class="movement-item">
+      <div class="mov-dot" style="background:${m.color};"></div>
+      <div style="flex:1;">
+        <p style="font-size:0.8rem;font-weight:700;">${m.who}</p>
+        <p style="font-size:0.7rem;color:var(--text-muted);">${m.tipo} · ${m.time}</p>
+      </div>
+      <span style="font-size:0.82rem;font-weight:800;color:${m.color};font-family:'IBM Plex Mono',monospace;">${m.val>0?'+':''}${m.val} ${ins.unidad}</span>
+    </div>`).join('');
+
+  // Trend chart
+  if (drawerChart) { drawerChart.destroy(); drawerChart = null; }
+  const ctx = document.getElementById('drawer-chart').getContext('2d');
+  const days = ['L','M','X','J','V','S','D'];
+  const data = Array.from({length:7}, (_,i) => Math.max(ins.stock - Math.floor(Math.random()*15)*(6-i), 0) + Math.floor(Math.random()*5));
+  data[6] = ins.stock;
+
+  drawerChart = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels: days,
+      datasets:[{
+        data,
+        borderColor: 'var(--accent)',
+        backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--data-theme') === 'dark'
+          ? 'rgba(0,212,255,0.08)' : 'rgba(0,179,225,0.08)',
+        borderWidth:2, pointRadius:3, pointBackgroundColor:'var(--accent)',
+        tension:0.4, fill:true
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{grid:{display:false},ticks:{color:'var(--text-muted)',font:{size:10,family:'IBM Plex Mono'}}},
+        y:{grid:{color:'var(--border)'},ticks:{color:'var(--text-muted)',font:{size:9}},beginAtZero:false}
+      }
+    }
+  });
+
+  document.getElementById('detail-drawer').classList.add('open');
+  document.getElementById('drawer-overlay').classList.add('open');
+}
+
+function closeDrawer() {
+  document.getElementById('detail-drawer').classList.remove('open');
+  document.getElementById('drawer-overlay').classList.remove('open');
+}
+
+// ── USERS TABLE ───────────────────────────
+function renderUsers() {
+  document.getElementById('users-tbody').innerHTML = usuarios.map(u => `
+    <tr onclick="openUserDrawer('${u.id}')">
+      <td>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:32px;height:32px;border-radius:50%;background:var(--accent);color:#002D4C;font-family:'Syne',sans-serif;font-weight:800;font-size:0.7rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${u.initials}</div>
+          <span style="font-weight:700;">${u.nombre}</span>
+        </div>
+      </td>
+      <td class="hide-mobile" style="color:var(--text-secondary);font-size:0.83rem;">${u.dept}</td>
+      <td class="hide-mobile" style="color:var(--text-muted);font-size:0.8rem;">${u.edificio}</td>
+      <td style="text-align:center;"><span class="mono" style="font-weight:800;color:var(--accent);">${u.solicitudes}</span></td>
+      <td style="text-align:center;"><span class="badge ${u.activo?'badge-ok':'badge-low'}">${u.activo?'Activo':'Inactivo'}</span></td>
+    </tr>`).join('');
+}
+
+function openUserDrawer(id) {
+  const u = usuarios.find(u => u.id === id);
+  if (!u) return;
+  document.getElementById('ud-avatar').textContent = u.initials;
+  document.getElementById('ud-name').textContent = u.nombre;
+  document.getElementById('ud-dept').textContent = u.dept + ' · ' + u.edificio;
+  document.getElementById('ud-total').textContent = u.solicitudes;
+  const drawer = document.getElementById('user-drawer');
+  drawer.style.transform = 'translateX(0)';
+  document.getElementById('drawer-overlay').classList.add('open');
+}
+
+function closeUserDrawer() {
+  document.getElementById('user-drawer').style.transform = 'translateX(100%)';
+  document.getElementById('drawer-overlay').classList.remove('open');
+}
+
+// ── PROFILE MENU ──────────────────────────
+function toggleProfileMenu() {
+  document.getElementById('profile-dropdown').classList.toggle('open');
+}
+function logOut() {
+  showToast('Sesión cerrada', 'Hasta luego, J. González', false);
+}
+
+// ── VENTANILLA ────────────────────────────
+function filterSolicitantes(val) {
+  const res = document.getElementById('solicitante-results');
+  if (!val || val.length < 1) { res.style.display='none'; return; }
+  const matches = usuarios.filter(u => u.nombre.toLowerCase().includes(val.toLowerCase()));
+  if (!matches.length) { res.style.display='none'; return; }
+  res.style.display = 'block';
+  res.innerHTML = matches.map(u => `
+    <div class="search-result-row" onclick="selectSolicitante('${u.id}')">
+      <div style="width:28px;height:28px;border-radius:50%;background:var(--accent);color:#002D4C;font-family:'Syne',sans-serif;font-weight:800;font-size:0.65rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${u.initials}</div>
+      <div>
+        <p style="font-size:0.83rem;font-weight:700;">${u.nombre}</p>
+        <p style="font-size:0.7rem;color:var(--text-muted);">${u.dept} · ${u.edificio}</p>
+      </div>
+    </div>`).join('');
+}
+
+function selectSolicitante(id) {
+  selectedSolicitante = usuarios.find(u => u.id === id);
+  document.getElementById('solicitante-results').style.display = 'none';
+  document.getElementById('search-solicitante').value = '';
+  const card = document.getElementById('solicitante-card');
+  card.style.display = 'flex';
+  document.getElementById('sol-avatar').textContent = selectedSolicitante.initials;
+  document.getElementById('sol-name').textContent = selectedSolicitante.nombre;
+  document.getElementById('sol-dept').textContent = selectedSolicitante.dept + ' · ' + selectedSolicitante.edificio;
+}
+
+function clearSolicitante() {
+  selectedSolicitante = null;
+  document.getElementById('solicitante-card').style.display = 'none';
+}
+
+function filterInsumos(val) {
+  renderInsumoResults(val);
+}
+
+function renderInsumoResults(val) {
+  const matches = insumos.filter(i => !val || i.nombre.toLowerCase().includes(val.toLowerCase()));
+  document.getElementById('insumo-results').innerHTML = matches.map(i => {
+    const color = i.state==='ok'?'var(--accent)':i.state==='mid'?'#F59E0B':'#EF4444';
+    return `<div class="insumo-item ${selectedInsumo?.id===i.id?'selected':''}" onclick="selectInsumo('${i.id}')">
+      <div>
+        <p style="font-size:0.83rem;font-weight:700;">${i.nombre}</p>
+        <p style="font-size:0.7rem;color:var(--text-muted);">${i.cat}</p>
+      </div>
+      <span class="mono" style="font-size:0.8rem;font-weight:800;color:${color};">${i.stock} ${i.unidad}</span>
+    </div>`;
+  }).join('');
+}
+
+function selectInsumo(id) {
+  selectedInsumo = insumos.find(i => i.id === id);
+  renderInsumoResults(document.getElementById('search-insumo').value);
+  const qs = document.getElementById('qty-section');
+  qs.style.display = 'block';
+  document.getElementById('insumo-selected-label').textContent =
+    `Seleccionado: ${selectedInsumo.nombre} · Stock disponible: ${selectedInsumo.stock} ${selectedInsumo.unidad}`;
+}
+
+function changeQty(d) {
+  const inp = document.getElementById('qty-input');
+  inp.value = Math.max(1, parseInt(inp.value||1) + d);
+}
+
+function addToBandeja() {
+  if (!selectedInsumo) return;
+  const qty = parseInt(document.getElementById('qty-input').value || 1);
+  const mult = parseInt(document.getElementById('embalaje-select').value);
+  const total = qty * mult;
+  const existing = bandeja.find(b => b.id === selectedInsumo.id);
+  if (existing) { existing.qty += total; }
+  else { bandeja.push({ id: selectedInsumo.id, nombre: selectedInsumo.nombre, unidad: selectedInsumo.unidad, qty: total }); }
+  renderBandeja();
+  document.getElementById('qty-input').value = 1;
+}
+
+function renderBandeja() {
+  const list = document.getElementById('bandeja-list');
+  const empty = document.getElementById('bandeja-empty');
+  const total = bandeja.reduce((a,b) => a+b.qty, 0);
+  document.getElementById('total-units').textContent = total;
+  document.getElementById('bandeja-count').textContent = bandeja.length + ' producto' + (bandeja.length!==1?'s':'') + ' agregado' + (bandeja.length!==1?'s':'');
+
+  if (!bandeja.length) {
+    empty.style.display = 'flex';
+    list.querySelectorAll('.bandeja-item').forEach(e => e.remove());
+    return;
+  }
+  empty.style.display = 'none';
+  list.querySelectorAll('.bandeja-item').forEach(e => e.remove());
+  bandeja.forEach((b,i) => {
+    const div = document.createElement('div');
+    div.className = 'bandeja-item';
+    div.innerHTML = `
+      <div style="flex:1;">
+        <p style="font-size:0.83rem;font-weight:700;">${b.nombre}</p>
+        <p style="font-size:0.72rem;color:var(--text-muted);">Cantidad: ${b.qty} ${b.unidad}</p>
+      </div>
+      <button onclick="removeFromBandeja(${i})" style="background:none;border:none;cursor:pointer;color:var(--text-muted);margin-left:8px;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>`;
+    list.appendChild(div);
+  });
+}
+
+function removeFromBandeja(i) {
+  bandeja.splice(i, 1);
+  renderBandeja();
+}
+
+function clearBandeja() {
+  bandeja = [];
+  renderBandeja();
+}
+
+function confirmDelivery() {
+  if (!bandeja.length) { showToast('Bandeja vacía', 'Agrega al menos un insumo', false); return; }
+  showToast('¡Entrega confirmada!', `${bandeja.length} insumo(s) · Inventario actualizado`, true);
+  bandeja = [];
+  selectedSolicitante = null;
+  selectedInsumo = null;
+  document.getElementById('obs-field').value = '';
+  document.getElementById('solicitante-card').style.display = 'none';
+  document.getElementById('qty-section').style.display = 'none';
+  renderBandeja();
+  renderInsumoResults('');
+}
+
+// ── TOAST ─────────────────────────────────
+function showToast(title, msg, success=true) {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-title').textContent = title;
+  document.getElementById('toast-msg').textContent = msg;
+  const icon = document.getElementById('toast-icon');
+  icon.style.color = success ? '#4ADE80' : '#EF4444';
+  if (success) {
+    icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>';
+  } else {
+    icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>';
+  }
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3200);
+}
+
+// ── REPORT CHARTS ─────────────────────────
+function getChartColors() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  return {
+    accent: isDark ? '#00D4FF' : '#00B3E1',
+    accentAlpha: isDark ? 'rgba(0,212,255,0.15)' : 'rgba(0,179,225,0.15)',
+    grid: isDark ? 'rgba(51,65,85,0.8)' : 'rgba(226,232,240,1)',
+    tick: isDark ? '#64748B' : '#94A3B8',
+    text: isDark ? '#E2E8F0' : '#002D4C',
+  };
+}
+
+function initReportCharts() {
+  const c = getChartColors();
+  const defaults = { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} };
+
+  // Chart 1: Consumo
+  if (!reportCharts['consumo']) {
+    const ctx1 = document.getElementById('chart-consumo').getContext('2d');
+    reportCharts['consumo'] = new Chart(ctx1, {
+      type:'line',
+      data:{
+        labels:['S1','S2','S3','S4','S5','Hoy'],
+        datasets:[{
+          label:'Salidas',
+          data:[42,65,55,80,71,34],
+          borderColor:c.accent, backgroundColor:c.accentAlpha,
+          borderWidth:2.5, pointRadius:4, pointBackgroundColor:c.accent,
+          tension:0.4, fill:true
+        }]
+      },
+      options:{...defaults,scales:{
+        x:{grid:{display:false},ticks:{color:c.tick,font:{size:10,family:'IBM Plex Mono'}}},
+        y:{grid:{color:c.grid},ticks:{color:c.tick,font:{size:9}}}
+      }}
+    });
+  }
+
+  // Chart 2: Top insumos (horizontal bar)
+  if (!reportCharts['top']) {
+    const ctx2 = document.getElementById('chart-top').getContext('2d');
+    reportCharts['top'] = new Chart(ctx2, {
+      type:'bar',
+      data:{
+        labels:['Papel Hig.','Bolsas','Cloro','Jabón','Serv.'],
+        datasets:[{
+          data:[120,80,60,45,30],
+          backgroundColor:[c.accent,'rgba(0,179,225,0.6)','rgba(0,179,225,0.4)','rgba(0,179,225,0.3)','rgba(0,179,225,0.2)'],
+          borderRadius:6, borderSkipped:false
+        }]
+      },
+      options:{...defaults,indexAxis:'y',scales:{
+        x:{grid:{color:c.grid},ticks:{color:c.tick,font:{size:9}}},
+        y:{grid:{display:false},ticks:{color:c.tick,font:{size:9,family:'IBM Plex Mono'}}}
+      }}
+    });
+  }
+
+  // Chart 3: Stock levels (radar or bar)
+  if (!reportCharts['stock']) {
+    const ctx3 = document.getElementById('chart-stock').getContext('2d');
+    reportCharts['stock'] = new Chart(ctx3, {
+      type:'bar',
+      data:{
+        labels:['#001','#002','#003','#004','#005','#006','#007','#008'],
+        datasets:[{
+          label:'% Stock',
+          data:[24,80,28,70,55,75,60,20],
+          backgroundColor: insumos.map(i =>
+            i.state==='ok'?c.accent:i.state==='mid'?'#F59E0B':'#EF4444'
+          ),
+          borderRadius:4, borderSkipped:false
+        }]
+      },
+      options:{...defaults,scales:{
+        x:{grid:{display:false},ticks:{color:c.tick,font:{size:9,family:'IBM Plex Mono'}}},
+        y:{max:100,grid:{color:c.grid},ticks:{color:c.tick,font:{size:9},callback:v=>v+'%'}}
+      }}
+    });
+  }
+
+  // Chart 4: Dept pie/doughnut
+  if (!reportCharts['dept']) {
+    const ctx4 = document.getElementById('chart-dept').getContext('2d');
+    reportCharts['dept'] = new Chart(ctx4, {
+      type:'doughnut',
+      data:{
+        labels:['Intendencia','Secretaría','Laboratorios','Mantenimiento'],
+        datasets:[{
+          data:[109,22,35,17],
+          backgroundColor:['#00B3E1','rgba(0,179,225,0.6)','#F59E0B','rgba(245,158,11,0.5)'],
+          borderWidth:0, hoverOffset:6
+        }]
+      },
+      options:{...defaults,
+        cutout:'65%',
+        plugins:{legend:{display:true,position:'right',labels:{color:c.tick,font:{size:10,family:'Manrope'},boxWidth:10,padding:12}}}
+      }
+    });
+  }
+}
+
+// ── RUN ───────────────────────────────────
+init();
+</script>
+</body>
+</html>
