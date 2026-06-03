@@ -1,15 +1,30 @@
 import React, { useState } from 'react';
 
-// Datos Mock para probar la interfaz
+// Datos Mock con Embalajes incluidos
 const USUARIOS_MOCK = [
   { id: 1, nombre: 'Don Roque', departamento: 'Intendencia', rol: 'Solicitante' },
-  { id: 2, nombre: 'Dra. María Sánchez', departamento: 'Dirección', rol: 'Administrativo' }
+  { id: 2, nombre: 'Dra. María Sánchez', departamento: 'Dirección', rol: 'Administrativo' },
+  { id: 3, nombre: 'Admin Ventanilla', departamento: 'Almacén', rol: 'Encargado' }
 ];
 
 const INSUMOS_MOCK = [
-  { id: 1, nombre: 'Cloro Líquido Concentrado', stock: 12.00, unidad: 'L' },
-  { id: 2, nombre: 'Papel Higiénico Institucional', stock: 480.00, unidad: 'Pzas' },
-  { id: 3, nombre: 'Jabón para Manos', stock: 2.50, unidad: 'L' }
+  { 
+    id: 1, nombre: 'Cloro Líquido Concentrado', stock: 12.00, unidad: 'L',
+    embalajes: [
+      { id: 101, nombre: 'Porrón', factor: 20 }
+    ]
+  },
+  { 
+    id: 2, nombre: 'Papel Higiénico Institucional', stock: 480.00, unidad: 'Pzas',
+    embalajes: [
+      { id: 102, nombre: 'Paquete', factor: 12 },
+      { id: 103, nombre: 'Caja', factor: 48 }
+    ]
+  },
+  { 
+    id: 3, nombre: 'Jabón para Manos', stock: 2.50, unidad: 'L',
+    embalajes: [] // Solo se despacha por litro
+  }
 ];
 
 export default function VentanillaView() {
@@ -18,25 +33,58 @@ export default function VentanillaView() {
   const [bandeja, setBandeja] = useState([]);
   const [observaciones, setObservaciones] = useState('');
 
-  // Funciones para manejar la bandeja
-  const agregarInsumo = (insumo) => {
-    if (!bandeja.find(item => item.id === insumo.id)) {
-      setBandeja([...bandeja, { ...insumo, cantidadOperacion: 1 }]);
+  // Estados para el panel de selección de cantidad/embalaje
+  const [activeInsumo, setActiveInsumo] = useState(null);
+  const [cantidadInput, setCantidadInput] = useState(1);
+  const [embalajeSeleccionado, setEmbalajeSeleccionado] = useState('null'); // 'null' representa menudeo
+
+  // Lógica de la bandeja
+  const addToBandeja = () => {
+    if (!activeInsumo) return;
+
+    // Buscar si el empaque seleccionado tiene nombre, o si es unidad suelta
+    let nombreEmbalaje = 'Piezas sueltas (x1)';
+    if (embalajeSeleccionado !== 'null') {
+      const emp = activeInsumo.embalajes.find(e => e.id.toString() === embalajeSeleccionado);
+      if (emp) nombreEmbalaje = `${emp.nombre} (x${emp.factor})`;
     }
+
+    // Generar un ID único para la fila de la bandeja (por si agrega el mismo insumo pero en diferente empaque)
+    const bandejaItemId = `${activeInsumo.id}-${embalajeSeleccionado}`;
+
+    // Revisar si ya existe en la bandeja para solo sumar
+    const existe = bandeja.find(item => item.bandejaId === bandejaItemId);
+    
+    if (existe) {
+      setBandeja(bandeja.map(item => 
+        item.bandejaId === bandejaItemId 
+          ? { ...item, cantidadOperacion: item.cantidadOperacion + cantidadInput } 
+          : item
+      ));
+    } else {
+      setBandeja([...bandeja, { 
+        bandejaId: bandejaItemId,
+        productoId: activeInsumo.id,
+        nombre: activeInsumo.nombre,
+        unidad: activeInsumo.unidad,
+        cantidadOperacion: cantidadInput,
+        embalajeId: embalajeSeleccionado === 'null' ? null : parseInt(embalajeSeleccionado),
+        embalajeNombre: nombreEmbalaje
+      }]);
+    }
+
+    // Limpiar selección para el siguiente producto
+    setActiveInsumo(null);
+    setCantidadInput(1);
+    setEmbalajeSeleccionado('null');
   };
 
-  const actualizarCantidad = (id, delta) => {
-    setBandeja(bandeja.map(item => {
-      if (item.id === id) {
-        const nuevaCantidad = Math.max(0.1, item.cantidadOperacion + delta);
-        return { ...item, cantidadOperacion: nuevaCantidad };
-      }
-      return item;
-    }));
+  const quitarInsumo = (bandejaId) => {
+    setBandeja(bandeja.filter(item => item.bandejaId !== bandejaId));
   };
 
-  const quitarInsumo = (id) => {
-    setBandeja(bandeja.filter(item => item.id !== id));
+  const changeQty = (delta) => {
+    setCantidadInput(prev => Math.max(1, prev + delta));
   };
 
   return (
@@ -71,18 +119,19 @@ export default function VentanillaView() {
         {/* PANEL IZQUIERDO: Búsqueda y Selección (7 columnas) */}
         <div className="lg:col-span-7 flex flex-col gap-6 overflow-y-auto pr-2">
           
-          {/* Paso 1: Solicitante */}
-          <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
-            <h3 className="font-heading font-bold text-sm uppercase text-text-muted tracking-wider mb-4">1. Identificar Solicitante</h3>
+          {/* Paso 1: Solicitante Dinámico */}
+          <div className="bg-card border border-border rounded-xl p-5 shadow-sm transition-colors">
+            <h3 className="font-heading font-bold text-sm uppercase text-text-muted tracking-wider mb-4">
+              1. {tipoMovimiento === 'ENTRADA' ? 'Identificar personal que recibe' : 'Identificar Solicitante'}
+            </h3>
             
             {!solicitante ? (
               <div className="space-y-3">
                 <input 
                   type="text" 
                   placeholder="Buscar por ID, matrícula o nombre..." 
-                  className="w-full bg-inputBg border-[1.5px] border-border rounded-lg py-2.5 px-4 text-sm text-text-primary outline-none focus:border-accent"
+                  className="w-full bg-inputBg border-[1.5px] border-border rounded-lg py-2.5 px-4 text-sm text-text-primary outline-none focus:border-accent transition-colors"
                 />
-                {/* Resultados rápidos de prueba */}
                 <div className="flex gap-2">
                   {USUARIOS_MOCK.map(u => (
                     <button 
@@ -97,7 +146,7 @@ export default function VentanillaView() {
             ) : (
               <div className="flex items-center justify-between bg-inputBg border border-border p-3 rounded-lg">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-accent/20 text-accent rounded-full flex items-center justify-center font-heading font-bold">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-heading font-bold ${tipoMovimiento === 'ENTRADA' ? 'bg-[#10B981]/20 text-[#10B981]' : 'bg-accent/20 text-accent'}`}>
                     {solicitante.nombre.substring(0, 2).toUpperCase()}
                   </div>
                   <div>
@@ -112,39 +161,99 @@ export default function VentanillaView() {
 
           {/* Paso 2: Insumos */}
           <div className="bg-card border border-border rounded-xl p-5 shadow-sm flex-1 flex flex-col">
-            <h3 className="font-heading font-bold text-sm uppercase text-text-muted tracking-wider mb-4">2. Agregar Insumos</h3>
+            <h3 className="font-heading font-bold text-sm uppercase text-text-muted tracking-wider mb-4">2. Catálogo de Insumos</h3>
             <input 
               type="text" 
               placeholder="Buscar producto por nombre o ID..." 
               className="w-full bg-inputBg border-[1.5px] border-border rounded-lg py-2.5 px-4 text-sm text-text-primary outline-none focus:border-accent mb-4"
             />
             
+            {/* Sección inyectada: Cantidad y Embalaje (Visible solo si hay insumo seleccionado) */}
+            {activeInsumo && (
+              <div className="mb-4 p-4 border border-accent/40 bg-[var(--accent-glow)] rounded-xl animate-fade-in">
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <p className="text-[0.65rem] font-heading font-bold uppercase tracking-widest text-accent mb-1">Configurar Adición</p>
+                    <p className="font-semibold text-sm text-text-primary">{activeInsumo.nombre}</p>
+                  </div>
+                  <button onClick={() => setActiveInsumo(null)} className="text-text-secondary hover:text-red-500">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-3 flex-wrap">
+                  {/* Controles numéricos */}
+                  <div className="flex items-center bg-card border border-border rounded-lg h-9">
+                    <button onClick={() => changeQty(-1)} className="px-3 text-text-secondary hover:text-accent font-bold h-full">−</button>
+                    <input 
+                      type="number" 
+                      value={cantidadInput} 
+                      onChange={(e) => setCantidadInput(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-12 text-center bg-transparent border-none outline-none font-mono text-sm font-bold text-text-primary appearance-none h-full"
+                    />
+                    <button onClick={() => changeQty(1)} className="px-3 text-text-secondary hover:text-accent font-bold h-full">+</button>
+                  </div>
+
+                  {/* Selector de Empaque */}
+                  <select 
+                    value={embalajeSeleccionado}
+                    onChange={(e) => setEmbalajeSeleccionado(e.target.value)}
+                    className="flex-1 min-w-[140px] bg-card border border-border rounded-lg h-9 px-3 text-sm text-text-primary outline-none focus:border-accent font-mono"
+                  >
+                    <option value="null">Unidad base (×1 {activeInsumo.unidad})</option>
+                    {activeInsumo.embalajes?.map(emb => (
+                      <option key={emb.id} value={emb.id}>
+                        {emb.nombre} (×{emb.factor} {activeInsumo.unidad})
+                      </option>
+                    ))}
+                  </select>
+
+                  <button 
+                    onClick={addToBandeja}
+                    className="h-9 px-4 rounded-lg bg-text-primary hover:opacity-85 text-app font-heading font-bold text-sm transition-opacity shadow-sm whitespace-nowrap dark:bg-accent dark:text-[#002D4C]"
+                  >
+                    + Agregar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Lista de Insumos */}
             <div className="space-y-2 overflow-y-auto pr-1">
               {INSUMOS_MOCK.map(insumo => (
-                <div key={insumo.id} className="flex items-center justify-between p-3 rounded-lg border border-border hover:border-accent/50 bg-app transition-colors group">
+                <div 
+                  key={insumo.id} 
+                  onClick={() => {
+                    setActiveInsumo(insumo);
+                    setCantidadInput(1);
+                    setEmbalajeSeleccionado('null');
+                  }}
+                  className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all group ${
+                    activeInsumo?.id === insumo.id 
+                      ? 'border-accent bg-accent/5' 
+                      : 'border-border bg-app hover:border-accent/50'
+                  }`}
+                >
                   <div>
                     <p className="font-semibold text-text-primary text-sm">{insumo.nombre}</p>
-                    <p className="text-xs font-mono text-text-muted">Stock actual: {insumo.stock} {insumo.unidad}</p>
+                    <p className="text-xs font-mono text-text-muted">Stock: {insumo.stock} {insumo.unidad}</p>
                   </div>
-                  <button 
-                    onClick={() => agregarInsumo(insumo)}
-                    className="p-1.5 bg-inputBg border border-border rounded-md text-text-secondary hover:text-accent hover:border-accent transition-colors"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
-                  </button>
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center border ${activeInsumo?.id === insumo.id ? 'border-accent bg-accent text-white' : 'border-border text-transparent group-hover:border-accent/50'}`}>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
         </div>
 
-        {/* PANEL DERECHO: Bandeja de Salida (5 columnas) */}
+        {/* PANEL DERECHO: Resumen de Operación (Bandeja de solo lectura) */}
         <div className="lg:col-span-5 bg-card border border-border rounded-xl shadow-sm flex flex-col overflow-hidden relative">
           
           <div className="p-5 border-b border-border bg-inputBg flex items-center justify-between">
             <h3 className="font-heading font-bold text-sm uppercase text-text-primary tracking-wider flex items-center gap-2">
               <svg className="w-5 h-5 text-accent" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
-              Resumen de Operación
+              Resumen (Solo lectura)
             </h3>
             <span className="bg-accent/10 text-accent text-xs font-bold px-2.5 py-1 rounded-full font-mono">{bandeja.length} items</span>
           </div>
@@ -157,31 +266,16 @@ export default function VentanillaView() {
               </div>
             ) : (
               bandeja.map(item => (
-                <div key={item.id} className="bg-app border border-border p-3 rounded-lg flex flex-col gap-3">
-                  <div className="flex justify-between items-start">
-                    <p className="text-sm font-semibold text-text-primary leading-tight pr-4">{item.nombre}</p>
-                    <button onClick={() => quitarInsumo(item.id)} className="text-text-muted hover:text-red-500 transition-colors">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                    </button>
+                <div key={item.bandejaId} className="bg-app border border-border p-3 rounded-lg flex items-center justify-between gap-3">
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-text-primary leading-tight mb-1">{item.nombre}</p>
+                    <span className="inline-block bg-inputBg border border-border px-2 py-0.5 rounded text-[0.7rem] font-mono text-text-secondary">
+                      {item.cantidadOperacion}x {item.embalajeNombre}
+                    </span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-mono text-text-secondary">Unidad base: {item.unidad}</span>
-                    
-                    {/* Controles de Cantidad */}
-                    <div className="flex items-center bg-inputBg border border-border rounded-md">
-                      <button onClick={() => actualizarCantidad(item.id, -1)} className="px-2 py-1 text-text-secondary hover:text-accent font-bold">-</button>
-                      <input 
-                        type="number" 
-                        value={item.cantidadOperacion} 
-                        onChange={(e) => {
-                          const val = parseFloat(e.target.value) || 0;
-                          setBandeja(bandeja.map(b => b.id === item.id ? { ...b, cantidadOperacion: val } : b));
-                        }}
-                        className="w-12 text-center bg-transparent border-none outline-none font-mono text-sm font-bold text-text-primary appearance-none"
-                      />
-                      <button onClick={() => actualizarCantidad(item.id, 1)} className="px-2 py-1 text-text-secondary hover:text-accent font-bold">+</button>
-                    </div>
-                  </div>
+                  <button onClick={() => quitarInsumo(item.bandejaId)} className="p-2 text-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-md transition-colors">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                  </button>
                 </div>
               ))
             )}
