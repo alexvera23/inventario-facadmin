@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import Sidebar from './components/Sidebar';
 import Navbar from './components/Navbar';
-import CatalogoView from './views/Catalogo/CatalogoView'; // <-- Importamos la vista
+import CatalogoView from './views/Catalogo/CatalogoView'; 
+import VentanillaView from './views/Ventanilla/VentanillaView';
 
 function App() {
   const [activeView, setActiveView] = useState('catalogo');
@@ -13,7 +14,7 @@ function App() {
       case 'catalogo':
         return <CatalogoView />;
       case 'ventanilla':
-        return <div className="p-8 text-center text-text-muted font-heading">Módulo de Ventanilla en construcción...</div>;
+        return <VentanillaView/>
       case 'usuarios':
         return <div className="p-8 text-center text-text-muted font-heading">Módulo de Usuarios en construcción...</div>;
       case 'reportes':
