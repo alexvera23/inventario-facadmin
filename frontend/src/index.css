@@ -1,111 +1,74 @@
+@import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap');
+
+/* En v4, mapeamos las variables nativas directamente al tema aquí */
+@theme {
+  --color-app: var(--bg-app);
+  --color-card: var(--bg-card);
+  --color-sidebar: var(--bg-sidebar);
+  --color-header: var(--bg-header);
+  
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  
+  --color-accent: var(--accent);
+  --color-accent-glow: var(--accent-glow);
+  --color-accent-strong: var(--accent-glow-strong);
+  
+  --color-border: var(--border);
+  --color-tableHover: var(--table-hover);
+  --color-inputBg: var(--input-bg);
+
+  --font-sans: 'Manrope', sans-serif;
+  --font-heading: 'Syne', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+}
+
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
-
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
-
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
+  /* Modo Claro - Alta Densidad (Tu Opción 3) */
+  --bg-app: #FFFFFF;
+  --bg-card: #F8FAFC;
+  --bg-sidebar: #F1F5F9;
+  --bg-header: #FFFFFF;
+  --text-primary: #002D4C;
+  --text-secondary: #475569;
+  --text-muted: #94A3B8;
+  --border: #E2E8F0;
+  --accent: #00B3E1;
+  --accent-glow: rgba(0, 179, 225, 0.10);
+  --accent-glow-strong: rgba(0, 179, 225, 0.20);
+  --table-hover: #F1F5F9;
+  --input-bg: #F8FAFC;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
+.dark {
+  /* Modo Oscuro - Sleek Cyber (Tu Opción 2) */
+  --bg-app: #0F172A;
+  --bg-card: #1E293B;
+  --bg-sidebar: #0B132B;
+  --bg-header: #1E293B;
+  --text-primary: #E2E8F0;
+  --text-secondary: #94A3B8;
+  --text-muted: #475569;
+  --border: #334155;
+  --accent: #00D4FF;
+  --accent-glow: rgba(0, 212, 255, 0.12);
+  --accent-glow-strong: rgba(0, 212, 255, 0.20);
+  --table-hover: #263348;
+  --input-bg: #0F172A;
 }
 
+/* Ahora sí, como ya están declaradas arriba, las puedes aplicar sin error */
 body {
-  margin: 0;
+  @apply bg-app text-text-primary transition-colors duration-300 font-sans;
 }
 
-#root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
+h1, h2, h3, h4, h5, h6 {
+  @apply font-heading tracking-tight;
 }
 
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
-}
-
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
-p {
-  margin: 0;
-}
-
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-}
-
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+.font-mono {
+  @apply font-mono;
 }
