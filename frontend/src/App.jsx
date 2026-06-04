@@ -3,6 +3,7 @@ import Sidebar from './components/Sidebar';
 import Navbar from './components/Navbar';
 import CatalogoView from './views/Catalogo/CatalogoView'; 
 import VentanillaView from './views/Ventanilla/VentanillaView';
+import UsuariosView from './views/Usuarios/UsuariosView';
 
 function App() {
   const [activeView, setActiveView] = useState('catalogo');
@@ -16,7 +17,7 @@ function App() {
       case 'ventanilla':
         return <VentanillaView/>
       case 'usuarios':
-        return <div className="p-8 text-center text-text-muted font-heading">Módulo de Usuarios en construcción...</div>;
+        return <UsuariosView/>
       case 'reportes':
         return <div className="p-8 text-center text-text-muted font-heading">Módulo de Reportes en construcción...</div>;
       default:
