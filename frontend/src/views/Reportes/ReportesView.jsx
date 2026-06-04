@@ -126,7 +126,7 @@ export default function ReportesView() {
             <select 
               value={mesSeleccionado}
               onChange={(e) => setMesSeleccionado(e.target.value)}
-              className="bg-transparent text-sm font-semibold text-text-primary outline-none border-none cursor-pointer pl-3 pr-2 py-1.5 focus:ring-0"
+              className="bg-transparent text-sm font-semibold text-text-primary outline-none border-none cursor-pointer pl-3 pr-2 py-1.5 focus:ring-0 dark:bg-card"
             >
               <option value="06-2026">Junio 2026</option>
               <option value="05-2026">Mayo 2026</option>
