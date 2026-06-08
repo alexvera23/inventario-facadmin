@@ -43,13 +43,20 @@ export default function CatalogoView() {
         </div>
         
         {/* Buscador local */}
-        <input 
+        <div className= "flex gap-3 w-full sm:w-auto">
+           <input 
           type="text" 
           placeholder="Filtrar catálogo..." 
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="bg-inputBg border-[1.5px] border-border rounded-lg py-2 px-4 text-sm text-text-primary outline-none w-full sm:w-64 focus:border-accent focus:shadow-[0_0_0_3px_var(--color-accent-glow)] transition-all"
         />
+        <button className="flex items-center justify-center gap-2 px-4 rounded-lg bg-text-primary text-app font-heading font-bold text-sm transition-opacity hover:opacity-85 whitespace-nowrap dark:bg-accent dark:text-[#002D4C]">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
+            <span className="hidden sm:inline">Nuevo Insumo</span>
+        </button>
+        </div>
+       
       </div>
 
       {/* Tarjeta de la Tabla */}
