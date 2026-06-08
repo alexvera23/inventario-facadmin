@@ -5,6 +5,7 @@ import CatalogoView from './views/Catalogo/CatalogoView';
 import VentanillaView from './views/Ventanilla/VentanillaView';
 import UsuariosView from './views/Usuarios/UsuariosView';
 import ReportesView from './views/Reportes/ReportesView';
+import ToastProvider from './components/ToastProvider';
 
 function App() {
   const [activeView, setActiveView] = useState('catalogo');
@@ -27,6 +28,8 @@ function App() {
   };
 
   return (
+    <>
+    <ToastProvider/>
     <div className="flex h-screen overflow-hidden bg-app text-text-primary transition-colors duration-300 font-sans">
       <Sidebar 
         activeView={activeView} 
@@ -42,6 +45,7 @@ function App() {
         </main>
       </div>
     </div>
+    </>
   );
 }
 

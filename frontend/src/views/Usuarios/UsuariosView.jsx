@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import UserDrawer from './UserDrawer';
 import ReportModal from '../Catalogo/ReportModal'; // <-- Reciclamos el modal
-
+import { toastService } from '../../services/toastService';
 const USUARIOS_MOCK = [
   { id: 'U01', initials: 'DR', nombre: 'Don Roque', departamento: 'Intendencia', edificio: 'Edificio 3', solicitudes: 48, activo: true },
   { id: 'U02', initials: 'MG', nombre: 'María García', departamento: 'Secretaría', edificio: 'Rectoría', solicitudes: 22, activo: true },
@@ -51,6 +51,7 @@ export default function UsuariosView() {
             className="bg-inputBg border-[1.5px] border-border rounded-lg py-2 px-4 text-sm text-text-primary outline-none flex-1 sm:w-56 focus:border-accent transition-all"
           />
           <button className="flex items-center justify-center gap-2 px-4 rounded-lg bg-text-primary text-app font-heading font-bold text-sm transition-opacity hover:opacity-85 whitespace-nowrap dark:bg-accent dark:text-[#002D4C]">
+
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
             <span className="hidden sm:inline">Nuevo Usuario</span>
           </button>
