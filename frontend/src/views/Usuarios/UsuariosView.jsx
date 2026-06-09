@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import UserDrawer from './UserDrawer';
 import ReportModal from '../Catalogo/ReportModal'; // <-- Reciclamos el modal
 import { toastService } from '../../services/toastService';
+import api from '../../services/api';
 const USUARIOS_MOCK = [
   { id: 'U01', initials: 'DR', nombre: 'Don Roque', departamento: 'Intendencia', edificio: 'Edificio 3', solicitudes: 48, activo: true },
   { id: 'U02', initials: 'MG', nombre: 'María García', departamento: 'Secretaría', edificio: 'Rectoría', solicitudes: 22, activo: true },
@@ -15,6 +16,7 @@ export default function UsuariosView() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  
 
   // Filtrado de búsqueda
   const usuariosFiltrados = USUARIOS_MOCK.filter(u => 
