@@ -45,6 +45,73 @@ class ProductoController {
             return res.status(500).json({ message: 'Error interno del servidor al recuperar el detalle del insumo.' });
         }
     }
+
+    // POST /api/productos
+    async crearProducto(req, res) {
+        try {
+            const nuevoProducto = await productoService.crear(req.body);
+            return res.status(201).json(nuevoProducto);
+        } catch (error) {
+            console.error('Error al crear producto:', error);
+            return res.status(500).json({ message: 'Error interno al crear el insumo.' });
+        }
+    }
+
+    // PUT /api/productos/:id
+    async actualizarProducto(req, res) {
+        try {
+            const { id } = req.params;
+            const productoActualizado = await productoService.actualizar(id, req.body);
+            return res.status(200).json(productoActualizado);
+        } catch (error) {
+            console.error('Error al actualizar producto:', error);
+            if (error.code === 'P2025') {
+                return res.status(404).json({ message: 'El insumo no existe.' });
+            }
+            return res.status(500).json({ message: 'Error interno al actualizar.' });
+        }
+    }
+
+    // DELETE /api/productos/:id
+    async eliminarProducto(req, res) {
+        try {
+            const { id } = req.params;
+            await productoService.eliminar(id);
+            return res.status(200).json({ message: 'Insumo eliminado correctamente.' });
+        } catch (error) {
+            console.error('Error al eliminar producto:', error);
+            if (error.message.includes('bitácora')) {
+                return res.status(409).json({ message: error.message }); // 409 Conflict
+            }
+            return res.status(500).json({ message: 'Error interno al eliminar el insumo.' });
+        }
+    }
+
+    // POST /api/productos/:id/embalajes
+    async agregarEmbalaje(req, res) {
+        try {
+            const { id } = req.params;
+            const nuevoEmbalaje = await productoService.agregarEmbalaje(id, req.body);
+            return res.status(201).json(nuevoEmbalaje);
+        } catch (error) {
+            console.error('Error al agregar embalaje:', error);
+            return res.status(500).json({ message: 'Error al registrar el embalaje.' });
+        }
+    }
+
+    // DELETE /api/embalajes/:id
+    async eliminarEmbalaje(req, res) {
+        try {
+            const { id } = req.params;
+            await productoService.eliminarEmbalaje(id);
+            return res.status(200).json({ message: 'Embalaje eliminado correctamente.' });
+        } catch (error) {
+            console.error('Error al eliminar embalaje:', error);
+            return res.status(500).json({ message: 'Error interno al eliminar el embalaje.' });
+        }
+    }
+
+
 }
 
 module.exports = new ProductoController();
