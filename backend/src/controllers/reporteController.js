@@ -43,6 +43,36 @@ class ReporteController {
             return res.status(500).json({ message: 'Error al auditar la actividad del usuario.' });
         }
     }
+       
+    // GET /api/reportes/insumo/:id?periodo=semana
+    async actividadProducto(req, res) {
+        try {
+            const { id } = req.params;
+            const { periodo } = req.query;
+
+            if (!id) {
+                return res.status(400).json({ message: 'El ID del producto es obligatorio.' });
+            }
+
+            // Llamamos al servicio
+            const datosActividad = await reporteService.obtenerActividadProducto(id, periodo);
+            
+            return res.status(200).json({
+                producto_id: id,
+                filtro_aplicado: periodo || 'semana',
+                estadisticas: datosActividad.kpis,
+                movimientos: datosActividad.historial
+            });
+        } catch (error) {
+            console.error(` Error al generar reporte del insumo ${req.params.id}:`, error);
+            return res.status(500).json({ 
+                message: 'Error al auditar la actividad del insumo.',
+                error: error.message 
+            });
+        }
+    }
+
+    
 }
 
 module.exports = new ReporteController();

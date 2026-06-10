@@ -9,4 +9,6 @@ router.get('/general', reporteController.reporteGeneral);
 // Ruta para auditar a un usuario específico
 router.get('/usuario/:id', reporteController.actividadUsuario);
 
+router.get('/insumo/:id', reporteController.actividadProducto);
+
 module.exports = router;

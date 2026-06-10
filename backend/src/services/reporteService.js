@@ -84,6 +84,81 @@ class ReporteService {
             orderBy: { fecha: 'desc' }
         });
     }
+
+    
+
+    async obtenerActividadProducto(productoId, periodo = 'semana') {
+        const id = parseInt(productoId);
+        if (isNaN(id)) throw new Error('El ID del producto debe ser un número válido');
+
+        // 1. Calcular la fecha de inicio según el período solicitado
+        const fechaInicio = new Date();
+        if (periodo === 'semana') {
+            fechaInicio.setDate(fechaInicio.getDate() - 7);
+        } else if (periodo === 'quincena') {
+            fechaInicio.setDate(fechaInicio.getDate() - 15);
+        } else if (periodo === 'mes') {
+            fechaInicio.setMonth(fechaInicio.getMonth() - 1);
+        } else {
+            // Por defecto una semana si mandan basura
+            fechaInicio.setDate(fechaInicio.getDate() - 7);
+        }
+
+        // 2. Consultar los movimientos en ese rango de fechas
+        const movimientos = await prisma.movimiento.findMany({
+            where: {
+                producto_id: id,
+                fecha: {
+                    gte: fechaInicio // gte = Greater Than or Equal (Mayor o igual a)
+                }
+            },
+            include: {
+                // Traemos los datos de las relaciones para mostrar los nombres en el frontend
+                solicitante: {
+                    select: { nombre: true, departamento: true }
+                },
+                encargado: {
+                    select: { nombre: true }
+                }
+            },
+            orderBy: {
+                fecha: 'desc' // Los más recientes primero
+            }
+        });
+
+        // 3. Procesar los KPIs (Totales de entradas y salidas para las tarjetas del Drawer)
+        let totalEntradas = 0;
+        let totalSalidas = 0;
+
+        const detalleFormateado = movimientos.map(mov => {
+            const cantidadNum = Number(mov.cantidad);
+            
+            if (mov.tipo === 'ENTRADA') {
+                totalEntradas += cantidadNum;
+            } else if (mov.tipo === 'SALIDA') {
+                totalSalidas += cantidadNum;
+            }
+
+            return {
+                id: mov.id,
+                tipo: mov.tipo,
+                cantidad: cantidadNum,
+                fecha: mov.fecha,
+                observaciones: mov.observaciones,
+                involucrado: mov.tipo === 'ENTRADA' ? mov.encargado?.nombre : (mov.solicitante?.nombre || 'Desconocido'),
+                departamento: mov.solicitante?.departamento || 'Almacén'
+            };
+        });
+
+        // 4. Retornar los datos estructurados
+        return {
+            kpis: {
+                entradas: totalEntradas,
+                salidas: totalSalidas
+            },
+            historial: detalleFormateado
+        };
+    }
 }
 
 module.exports = new ReporteService();
