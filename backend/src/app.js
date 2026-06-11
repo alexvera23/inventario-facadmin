@@ -6,6 +6,7 @@ const prisma = require('./config/db');
 const productoRoutes = require('./routes/productoRoutes');
 const movimientoRoutes = require('./routes/movimientoRoutes');
 const reporteRoutes = require('./routes/reporteRoutes');
+const usuarioRoutes = require('./routes/usuarioRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -49,6 +50,7 @@ app.get('/api/health', async (req, res) => {
 app.use('/api/productos', productoRoutes);
 app.use('/api/movimientos',movimientoRoutes);
 app.use('/api/reportes',reporteRoutes);
+app.use('/api/usuarios',usuarioRoutes);
 
 
 
