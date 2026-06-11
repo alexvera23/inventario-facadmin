@@ -2,85 +2,91 @@ const prisma = require('../config/db');
 const { Prisma } = require('@prisma/client');
 
 class MovimientoService {
-    async registrarMovimiento({ productoId, cantidad, solicitanteId, encargadoId, embalajeId, tipo, observaciones }) {
-        // Validar que el tipo de movimiento sea correcto
-        if (!['ENTRADA', 'SALIDA'].includes(tipo)) {
-            throw new Error('TIPO_MOVIMIENTO_INVALIDO');
-        }
+   async registrarMovimientoMasivo({ tipo, solicitanteId, encargadoId, observaciones, items }) {
+        // 1. Validaciones iniciales
+        if (!['ENTRADA', 'SALIDA'].includes(tipo)) throw new Error('TIPO_MOVIMIENTO_INVALIDO');
+        if (!Array.isArray(items) || items.length === 0) throw new Error('CARRITO_VACIO');
 
         return await prisma.$transaction(async (tx) => {
             
-            // 1. Validar que el producto exista
-            const producto = await tx.producto.findUnique({
-                where: { id: parseInt(productoId) }
+            // 2. Validar que el Encargado (El que despacha/recibe) exista
+            const encargado = await tx.usuario.findUnique({
+                where: { id: parseInt(encargadoId) }
             });
-            if (!producto) {
-                throw new Error('PRODUCTO_NOT_FOUND');
-            }
+            if (!encargado) throw new Error('ENCARGADO_NOT_FOUND');
 
-            // 2. Validar que el usuario (solicitante/proveedor/personal) exista
-            const solicitante = await tx.usuario.findUnique({
-                where: { id: parseInt(solicitanteId) }
-            });
-            if (!solicitante) {
-                throw new Error('SOLICITANTE_NOT_FOUND');
-            }
-
-            // 3. Calcular la cantidad neta usando el factor de conversión del embalaje si existe
-            let cantidadNeta = new Prisma.Decimal(cantidad);
-
-            if (embalajeId) {
-                const embalaje = await tx.embalaje.findUnique({
-                    where: { id: parseInt(embalajeId) }
+            // 3. Validar Solicitante (Es obligatorio si es SALIDA, pero opcional en ENTRADA)
+            let solicitante = null;
+            if (solicitanteId) {
+                solicitante = await tx.usuario.findUnique({
+                    where: { id: parseInt(solicitanteId) }
                 });
-                if (!embalaje || embalaje.producto_id !== producto.id) {
-                    throw new Error('EMBALAJE_INVALIDO');
-                }
-                // Multiplicamos la cantidad por su factor (Ej: 10 cajas * 48 piezas = 480 piezas netas)
-                cantidadNeta = cantidadNeta.mul(embalaje.factor_conversion);
+                if (!solicitante) throw new Error('SOLICITANTE_NOT_FOUND');
+            } else if (tipo === 'SALIDA') {
+                throw new Error('SOLICITANTE_REQUERIDO_PARA_SALIDA');
             }
 
-            let nuevoStock;
+            const movimientosRegistrados = [];
 
-            // 4. Aplicar lógica dependiendo de si es ENTRADA o SALIDA
-            if (tipo === 'SALIDA') {
-                // Verificar si hay suficiente stock para la salida
-                if (producto.stock_actual.lt(cantidadNeta)) {
-                    throw new Error('STOCK_INSUFICIENTE');
+            // 4. Bucle para procesar cada artículo del carrito
+            // Usamos for...of porque await funciona perfectamente dentro de él para mantener la secuencia
+            for (const item of items) {
+                const producto = await tx.producto.findUnique({
+                    where: { id: parseInt(item.productoId) }
+                });
+                
+                // Le pegamos el ID al error para que el Front sepa cuál falló
+                if (!producto) throw new Error(`PRODUCTO_NOT_FOUND:${item.productoId}`);
+
+                // Calcular la cantidad neta
+                let cantidadNeta = new Prisma.Decimal(item.cantidad);
+
+                if (item.embalajeId) {
+                    const embalaje = await tx.embalaje.findUnique({
+                        where: { id: parseInt(item.embalajeId) }
+                    });
+                    if (!embalaje || embalaje.producto_id !== producto.id) {
+                        throw new Error(`EMBALAJE_INVALIDO:${producto.nombre}`);
+                    }
+                    cantidadNeta = cantidadNeta.mul(embalaje.factor_conversion);
                 }
-                nuevoStock = producto.stock_actual.minus(cantidadNeta);
-            } else {
-                // Si es ENTRADA, simplemente sumamos al stock actual
-                nuevoStock = producto.stock_actual.plus(cantidadNeta);
+
+                let nuevoStock;
+
+                // Lógica de inventario por artículo
+                if (tipo === 'SALIDA') {
+                    if (producto.stock_actual.lt(cantidadNeta)) {
+                        // Enviamos el nombre del producto para una alerta amigable
+                        throw new Error(`STOCK_INSUFICIENTE:${producto.nombre}`);
+                    }
+                    nuevoStock = producto.stock_actual.minus(cantidadNeta);
+                } else {
+                    nuevoStock = producto.stock_actual.plus(cantidadNeta);
+                }
+
+                // Actualizar el stock de este producto
+                await tx.producto.update({
+                    where: { id: producto.id },
+                    data: { stock_actual: nuevoStock }
+                });
+
+                // Registrar la fila en la bitácora
+                const nuevoMovimiento = await tx.movimiento.create({
+                    data: {
+                        producto_id: producto.id,
+                        tipo: tipo,
+                        cantidad: cantidadNeta,
+                        solicitante_id: solicitante ? solicitante.id : null,
+                        encargado_id: encargado.id,
+                        observaciones: observaciones || null
+                    }
+                });
+
+                movimientosRegistrados.push(nuevoMovimiento);
             }
 
-            // 5. Actualizar el stock del producto
-            const productoActualizado = await tx.producto.update({
-                where: { id: producto.id },
-                data: { stock_actual: nuevoStock }
-            });
-
-            // 6. Registrar en la bitácora
-            const nuevoMovimiento = await tx.movimiento.create({
-                data: {
-                    producto_id: producto.id,
-                    tipo: tipo, // Guardará 'ENTRADA' o 'SALIDA'
-                    cantidad: cantidadNeta,
-                    solicitante_id: solicitante.id,
-                    encargado_id: parseInt(encargadoId),
-                    observaciones: observaciones || null
-                },
-                include: {
-                    producto: true,
-                    solicitante: true
-                }
-            });
-
-            return {
-                movimiento: nuevoMovimiento,
-                stock_resultante: productoActualizado.stock_actual,
-                cantidad_neta_afectada: cantidadNeta
-            };
+            // Si el bucle termina sin errores, Prisma hace el COMMIT automáticamente
+            return movimientosRegistrados;
         });
     }
 
