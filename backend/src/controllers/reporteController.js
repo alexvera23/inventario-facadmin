@@ -72,6 +72,18 @@ class ReporteController {
         }
     }
 
+    // GET /api/reportes/dashboard?mes=06-2026
+    async datosDashboard(req, res) {
+        try {
+            const { mes } = req.query;
+            const data = await reporteService.obtenerDashboard(mes);
+            return res.status(200).json(data);
+        } catch (error) {
+            console.error('Error al cargar dashboard:', error);
+            return res.status(500).json({ message: 'Error interno al generar analíticas.' });
+        }
+    }
+
     
 }
 

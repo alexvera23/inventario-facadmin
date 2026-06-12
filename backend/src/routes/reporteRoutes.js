@@ -11,4 +11,6 @@ router.get('/usuario/:id', reporteController.actividadUsuario);
 
 router.get('/insumo/:id', reporteController.actividadProducto);
 
+router.get('/dashboard', reporteController.datosDashboard);
+
 module.exports = router;

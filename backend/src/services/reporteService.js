@@ -159,6 +159,114 @@ class ReporteService {
             historial: detalleFormateado
         };
     }
+    
+    // Nuevo Método: Generar toda la data del Dashboard de un solo golpe
+    async obtenerDashboard(mesAño = null) {
+        // 1. Filtrar por el mes seleccionado (Ej: '06-2026')
+        const fechaInicio = new Date();
+        const fechaFin = new Date();
+        
+        if (mesAño) {
+            const [mes, año] = mesAño.split('-');
+            fechaInicio.setFullYear(parseInt(año), parseInt(mes) - 1, 1);
+            fechaInicio.setHours(0, 0, 0, 0);
+            
+            fechaFin.setFullYear(parseInt(año), parseInt(mes), 0); // Último día del mes
+            fechaFin.setHours(23, 59, 59, 999);
+        } else {
+            fechaInicio.setDate(1); // Si no hay fecha, toma el mes actual
+        }
+
+        // 2. Extraer todos los movimientos del periodo con sus relaciones
+        const movimientos = await prisma.movimiento.findMany({
+            where: { fecha: { gte: fechaInicio, lte: fechaFin } },
+            include: {
+                producto: true,
+                solicitante: true
+            }
+        });
+
+        // 3. Variables para acumular datos
+        let totalEntradas = 0;
+        let totalSalidas = 0;
+        const usuariosUnicos = new Set();
+        
+        const categoriasMap = {};
+        const insumosMap = {};
+        const deptosMap = {};
+        
+        // Mapa para la tendencia semanal (agrupado por día del mes)
+        const tendenciaMap = {}; 
+
+        // 4. Procesamiento
+        movimientos.forEach(mov => {
+            const qty = Number(mov.cantidad);
+            const diaStr = new Date(mov.fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
+
+            // Inicializar el día en la tendencia si no existe
+            if (!tendenciaMap[diaStr]) tendenciaMap[diaStr] = { entradas: 0, salidas: 0 };
+
+            if (mov.tipo === 'ENTRADA') {
+                totalEntradas += qty;
+                tendenciaMap[diaStr].entradas += qty;
+            } else if (mov.tipo === 'SALIDA') {
+                totalSalidas += qty;
+                tendenciaMap[diaStr].salidas += qty;
+
+                // Solo para las SALIDAS sumamos a las gráficas de consumo
+                if (mov.solicitante_id) usuariosUnicos.add(mov.solicitante_id);
+
+                // Acumulado por Categoría
+                const cat = mov.producto?.categoria || 'Sin Categoría';
+                categoriasMap[cat] = (categoriasMap[cat] || 0) + qty;
+
+                // Acumulado por Producto (Top Insumos)
+                const prod = mov.producto?.nombre || 'Desconocido';
+                insumosMap[prod] = (insumosMap[prod] || 0) + qty;
+
+                // Acumulado por Departamento
+                const depto = mov.solicitante?.departamento || 'No especificado';
+                deptosMap[depto] = (deptosMap[depto] || 0) + 1; // Contamos número de solicitudes, no piezas
+            }
+        });
+
+        // 5. Insumos Críticos (Directo de la tabla de productos)
+        const criticos = await prisma.producto.findMany({
+            where: { stock_actual: { lte: 5 } } // Ajusta tu lógica de mínimo aquí si usas otra columna
+        });
+
+        // 6. Ordenar y formatear para Chart.js
+        const sortYCortar = (obj, limite = 5) => Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, limite);
+
+        const topInsumosArray = sortYCortar(insumosMap);
+        const topDeptosArray = sortYCortar(deptosMap);
+
+        return {
+            kpis: {
+                salidas: totalSalidas,
+                entradas: totalEntradas,
+                criticos: criticos.length,
+                usuariosActivos: usuariosUnicos.size
+            },
+            tendencia: {
+                labels: Object.keys(tendenciaMap),
+                entradas: Object.values(tendenciaMap).map(d => d.entradas),
+                salidas: Object.values(tendenciaMap).map(d => d.salidas)
+            },
+            categorias: {
+                labels: Object.keys(categoriasMap),
+                data: Object.values(categoriasMap)
+            },
+            topInsumos: {
+                labels: topInsumosArray.map(i => i[0]),
+                data: topInsumosArray.map(i => i[1])
+            },
+            departamentos: {
+                labels: topDeptosArray.map(d => d[0]),
+                data: topDeptosArray.map(d => d[1])
+            }
+        };
+    }
 }
 
 module.exports = new ReporteService();
