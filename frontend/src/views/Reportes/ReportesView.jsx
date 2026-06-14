@@ -14,6 +14,7 @@ import {
   Filler
 } from 'chart.js';
 import { Line, Doughnut, Bar } from 'react-chartjs-2';
+import api from '../../services/api';
 
 ChartJS.register(
   CategoryScale, LinearScale, PointElement, LineElement,
@@ -78,8 +79,25 @@ const commonOptions = {
     tooltip: { backgroundColor: '#1E293B', titleColor: '#F1F5F9', bodyColor: '#94A3B8', borderColor: '#334155', borderWidth: 1 }
   },
   scales: {
-    y: { grid: { color: 'rgba(148,163,184,0.1)' }, ticks: { color: '#94A3B8' } },
-    x: { grid: { display: false }, ticks: { color: '#94A3B8' } }
+    y: { grid: { color: 'rgba(148,163,184,0.1)' }, ticks: { color: '#94A3B8', font: { family: 'Manrope' } } },
+    x: { grid: { display: false }, ticks: { color: '#94A3B8', font: { family: 'Manrope' } } }
+  }
+};
+
+// ─── Configuración específica para la gráfica horizontal de Deptos ──────────
+const horizontalBarOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  indexAxis: 'y', // Voltea la gráfica
+  plugins: {
+    legend: { display: false },
+    tooltip: { backgroundColor: '#1E293B', titleColor: '#F1F5F9', bodyColor: '#94A3B8', borderColor: '#334155', borderWidth: 1 }
+  },
+  scales: {
+    // En modo horizontal, X es la barra de medición (ocupa las líneas de fondo)
+    x: { grid: { color: 'rgba(148,163,184,0.1)' }, ticks: { color: '#94A3B8', font: { family: 'Manrope' } } },
+    // Y contiene los nombres de los departamentos (ocupa quitar la rejilla)
+    y: { grid: { display: false }, ticks: { color: '#94A3B8', font: { family: 'Manrope', size: 11 } } }
   }
 };
 
@@ -108,11 +126,11 @@ const PALETTE = {
 function transformarDatos(data) {
   // Tendencia (líneas)
   const lineChartData = {
-    labels: data.tendencia.labels,
+    labels: data.tendencia?.labels || [],
     datasets: [
       {
         label: 'Salidas',
-        data: data.tendencia.salidas,
+        data: data.tendencia?.salidas || [],
         borderColor: PALETTE.cyan,
         backgroundColor: PALETTE.cyanBg,
         tension: 0.4,
@@ -121,7 +139,7 @@ function transformarDatos(data) {
       },
       {
         label: 'Entradas',
-        data: data.tendencia.entradas,
+        data: data.tendencia?.entradas || [],
         borderColor: PALETTE.emerald,
         backgroundColor: 'transparent',
         tension: 0.4,
@@ -134,10 +152,10 @@ function transformarDatos(data) {
   // Donut de categorías
   const catColors = [PALETTE.navy, PALETTE.cyan, PALETTE.emerald, PALETTE.amber, PALETTE.violet, PALETTE.rose];
   const doughnutData = {
-    labels: data.categorias.labels,
+    labels: data.categorias?.labels || [],
     datasets: [{
-      data: data.categorias.data,
-      backgroundColor: catColors.slice(0, data.categorias.labels.length),
+      data: data.categorias?.data || [],
+      backgroundColor: catColors.slice(0, (data.categorias?.labels || []).length),
       borderWidth: 0,
       hoverOffset: 6
     }]
@@ -145,10 +163,10 @@ function transformarDatos(data) {
 
   // Bar: Top insumos
   const topInsumosData = {
-    labels: data.topInsumos.labels,
+    labels: data.topInsumos?.labels || [],
     datasets: [{
       label: 'Volumen de salida',
-      data: data.topInsumos.data,
+      data: data.topInsumos?.data || [],
       backgroundColor: PALETTE.cyan,
       borderRadius: 6,
     }]
@@ -156,10 +174,10 @@ function transformarDatos(data) {
 
   // Bar: Departamentos
   const deptosData = {
-    labels: data.departamentos.labels,
+    labels: data.departamentos?.labels || [],
     datasets: [{
       label: 'Solicitudes',
-      data: data.departamentos.data,
+      data: data.departamentos?.data || [],
       backgroundColor: PALETTE.emerald,
       borderRadius: 6,
     }]
@@ -184,18 +202,16 @@ export default function ReportesView() {
     setError(null);
 
     try {
-      const res = await fetch(`/api/reportes/dashboard?mes=${mes}`);
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.message || `Error ${res.status} al cargar el dashboard`);
-      }
-
-      const data = await res.json();
-      setDashboardData(data);
+      const res = await api.get(`/reportes/dashboard?mes=${mes}`);
+      
+      // Axios ya te devuelve el JSON parseado automáticamente en res.data
+      setDashboardData(res.data);
+      
     } catch (err) {
       console.error('Dashboard fetch error:', err);
-      setError(err.message || 'No se pudo conectar con el servidor.');
+      // Extraemos el mensaje de error de Axios de forma segura
+      const mensajeBackend = err.response?.data?.message;
+      setError(mensajeBackend || err.message || 'No se pudo conectar con el servidor.');
     } finally {
       setCargando(false);
     }
@@ -312,7 +328,7 @@ export default function ReportesView() {
                 </span>
               </div>
               <p className="text-3xl font-heading font-black text-text-primary">
-                {kpis?.salidas?.toLocaleString('es-MX') ?? '—'}
+                {kpis?.salidas?.toLocaleString('es-MX') ?? 0}
               </p>
               <p className="text-xs text-text-muted mt-2">Unidades consumidas en {labelMes}</p>
             </div>
@@ -321,14 +337,14 @@ export default function ReportesView() {
             <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-[0.7rem] font-heading font-bold uppercase tracking-wider text-text-muted">Total Entradas</p>
-                <span className="w-8 h-8 rounded-full bg-[#10B981]/10 flex items-center justify-center text-[#10B981]">
+                <span className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 10V7" />
                   </svg>
                 </span>
               </div>
               <p className="text-3xl font-heading font-black text-text-primary">
-                {kpis?.entradas?.toLocaleString('es-MX') ?? '—'}
+                {kpis?.entradas?.toLocaleString('es-MX') ?? 0}
               </p>
               <p className="text-xs text-text-muted mt-2">Unidades abastecidas en {labelMes}</p>
             </div>
@@ -344,7 +360,7 @@ export default function ReportesView() {
                 </span>
               </div>
               <p className={`text-3xl font-heading font-black ${kpis?.criticos > 0 ? 'text-red-500' : 'text-text-primary'}`}>
-                {kpis?.criticos ?? '—'}
+                {kpis?.criticos ?? 0}
               </p>
               <p className="text-xs text-text-muted mt-2">
                 {kpis?.criticos > 0 ? 'Requieren abastecimiento urgente' : 'Sin stock crítico'}
@@ -362,7 +378,7 @@ export default function ReportesView() {
                 </span>
               </div>
               <p className="text-3xl font-heading font-black text-text-primary">
-                {kpis?.usuariosActivos ?? '—'}
+                {kpis?.usuariosActivos ?? 0}
               </p>
               <p className="text-xs text-text-muted mt-2">Solicitantes con actividad en {labelMes}</p>
             </div>
@@ -385,13 +401,13 @@ export default function ReportesView() {
                 <h3 className="font-heading font-bold text-sm uppercase text-text-muted tracking-wider">
                   Tendencia de Inventario — {labelMes}
                 </h3>
-                {/* Indicador vivo */}
-                {graficas?.lineChartData.datasets[0].data.length === 0 && (
-                  <span className="text-xs text-text-muted italic">Sin datos en este período</span>
-                )}
               </div>
               <div className="flex-1 relative w-full h-full min-h-[220px]">
-                {graficas && <Line data={graficas.lineChartData} options={commonOptions} />}
+                {graficas?.lineChartData.labels.length > 0 ? (
+                  <Line data={graficas.lineChartData} options={commonOptions} />
+                ) : (
+                  <p className="text-text-muted text-sm italic flex items-center justify-center h-full">No hay movimientos en este periodo</p>
+                )}
               </div>
             </div>
 
@@ -401,10 +417,11 @@ export default function ReportesView() {
                 Consumo por Categoría
               </h3>
               <div className="flex-1 relative w-full h-full min-h-[220px] flex items-center justify-center">
-                {graficas?.doughnutData.labels.length > 0
-                  ? <Doughnut data={graficas.doughnutData} options={doughnutOptions} />
-                  : <p className="text-text-muted text-sm italic">Sin datos</p>
-                }
+                {graficas?.doughnutData.labels.length > 0 ? (
+                  <Doughnut data={graficas.doughnutData} options={doughnutOptions} />
+                ) : (
+                  <p className="text-text-muted text-sm italic">Sin consumos este mes</p>
+                )}
               </div>
             </div>
           </>
@@ -426,15 +443,14 @@ export default function ReportesView() {
                 Top 5 Insumos Más Solicitados
               </h3>
               <div className="flex-1 relative w-full h-full min-h-[220px]">
-                {graficas?.topInsumosData.labels.length > 0
-                  ? (
+                {graficas?.topInsumosData.labels.length > 0 ? (
                     <Bar
                       data={graficas.topInsumosData}
                       options={{ ...commonOptions, plugins: { ...commonOptions.plugins, legend: { display: false } } }}
                     />
-                  )
-                  : <p className="text-text-muted text-sm italic flex items-center justify-center h-full">Sin datos</p>
-                }
+                  ) : (
+                    <p className="text-text-muted text-sm italic flex items-center justify-center h-full">Sin datos de salida</p>
+                  )}
               </div>
             </div>
 
@@ -444,19 +460,14 @@ export default function ReportesView() {
                 Solicitudes por Departamento
               </h3>
               <div className="flex-1 relative w-full h-full min-h-[220px]">
-                {graficas?.deptosData.labels.length > 0
-                  ? (
+                {graficas?.deptosData.labels.length > 0 ? (
                     <Bar
                       data={graficas.deptosData}
-                      options={{
-                        ...commonOptions,
-                        indexAxis: 'y',
-                        plugins: { ...commonOptions.plugins, legend: { display: false } }
-                      }}
+                      options={horizontalBarOptions} // Usa las opciones corregidas para eje invertido
                     />
-                  )
-                  : <p className="text-text-muted text-sm italic flex items-center justify-center h-full">Sin datos</p>
-                }
+                  ) : (
+                    <p className="text-text-muted text-sm italic flex items-center justify-center h-full">Sin solicitudes este mes</p>
+                  )}
               </div>
             </div>
           </>

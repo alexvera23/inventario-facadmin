@@ -231,10 +231,10 @@ class ReporteService {
         });
 
         // 5. Insumos Críticos (Directo de la tabla de productos)
-        const criticos = await prisma.producto.findMany({
-            where: { stock_actual: { lte: 5 } } // Ajusta tu lógica de mínimo aquí si usas otra columna
-        });
-
+        const criticos = await prisma.$queryRaw`
+            SELECT id FROM productos
+            WHERE stock_actual <= stock_minimo
+            `;
         // 6. Ordenar y formatear para Chart.js
         const sortYCortar = (obj, limite = 5) => Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, limite);
 
