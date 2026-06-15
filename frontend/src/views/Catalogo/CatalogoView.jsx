@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import DetailDrawer from './DetailDrawer';
 import ReportModal from './ReportModal';
 import api from '../../services/api';
+import InsumoModal from '../../components/Modals/InsumoModal';
 
 export default function CatalogoView() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -12,6 +13,7 @@ export default function CatalogoView() {
   // Estados para la conexión con el Backend
   const [insumos, setInsumos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isInsumoModalOpen, setIsInsumoModalOpen]= useState(false);
 
   useEffect(() => {
     fetchProductos();
@@ -100,7 +102,8 @@ export default function CatalogoView() {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="bg-inputBg border-[1.5px] border-border rounded-lg py-2 px-4 text-sm text-text-primary outline-none w-full sm:w-64 focus:border-accent focus:shadow-[0_0_0_3px_var(--color-accent-glow)] transition-all"
           />
-          <button className="flex items-center justify-center gap-2 px-4 rounded-lg bg-text-primary text-app font-heading font-bold text-sm transition-opacity hover:opacity-85 whitespace-nowrap dark:bg-accent dark:text-[#002D4C]">
+          <button onClick={() => setIsInsumoModalOpen(true)}
+             className="flex items-center justify-center gap-2 px-4 rounded-lg bg-text-primary text-app font-heading font-bold text-sm transition-opacity hover:opacity-85 whitespace-nowrap dark:bg-accent dark:text-[#002D4C]">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
             <span className="hidden sm:inline">Nuevo Insumo</span>
           </button>
@@ -173,6 +176,12 @@ export default function CatalogoView() {
         initialScope="insumo"
         initialSubjectId={selectedProduct?.id}
       />
+      {/*Formulario Modal Insumo*/}
+      <InsumoModal
+        isOpen={isInsumoModalOpen}
+        onClose={() => setIsInsumoModalOpen(false)}
+        onSuccess={fetchProductos}
+        />
     </div>
   );
 }

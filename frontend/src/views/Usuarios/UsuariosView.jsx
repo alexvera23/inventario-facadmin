@@ -3,12 +3,14 @@ import UserDrawer from './UserDrawer';
 import ReportModal from '../Catalogo/ReportModal';
 import { toastService } from '../../services/toastService';
 import api from '../../services/api';
+import UsuarioModal from '../../components/Modals/UsuarioModal';
 
 export default function UsuariosView() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isUserModalOpen, setIsUserModalOpen]= useState(false);
 
   // --------------------------------------------------------
   // ESTADOS PARA DATOS REALES DE LA API
@@ -108,7 +110,8 @@ export default function UsuariosView() {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="bg-inputBg border-[1.5px] border-border rounded-lg py-2 px-4 text-sm text-text-primary outline-none flex-1 sm:w-56 focus:border-accent transition-all"
           />
-          <button className="flex items-center justify-center gap-2 px-4 rounded-lg bg-text-primary text-app font-heading font-bold text-sm transition-opacity hover:opacity-85 whitespace-nowrap dark:bg-accent dark:text-[#002D4C]">
+          <button onClick={() => setIsUserModalOpen(true)}
+            className="flex items-center justify-center gap-2 px-4 rounded-lg bg-text-primary text-app font-heading font-bold text-sm transition-opacity hover:opacity-85 whitespace-nowrap dark:bg-accent dark:text-[#002D4C]">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
             <span className="hidden sm:inline">Nuevo Usuario</span>
           </button>
@@ -200,6 +203,13 @@ export default function UsuariosView() {
         onClose={() => setIsReportModalOpen(false)}
         initialScope="usuario"
         initialSubjectId={selectedUser?.id}
+      />
+
+      {/* Formulario Modal */}
+      <UsuarioModal
+      isOpen={isUserModalOpen}
+      onClose={()=> setIsUserModalOpen(false)}
+      onSuccess={fetchUsuarios}
       />
 
     </div>
