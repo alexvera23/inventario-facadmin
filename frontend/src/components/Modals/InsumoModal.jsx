@@ -6,7 +6,7 @@ export default function InsumoModal({ isOpen, onClose, onSuccess }) {
   // 1. Estado para los datos básicos del insumo
   const [formData, setFormData] = useState({
     nombre: '',
-    categoria: '',
+    categoria: 'Limpieza',
     unidad_medida: 'Pzas',
     stock_actual: '',
     stock_minimo: ''
@@ -125,11 +125,16 @@ export default function InsumoModal({ isOpen, onClose, onSuccess }) {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-[0.7rem] font-heading font-bold uppercase text-text-muted mb-1.5">Categoría *</label>
-                <input 
-                  type="text" name="categoria" required value={formData.categoria} onChange={handleChange}
-                  placeholder="Ej. Limpieza" 
-                  className="w-full bg-inputBg border border-border rounded-lg p-2.5 text-sm text-text-primary outline-none focus:border-accent"
-                />
+                <select 
+                name="categoria" required value={formData.categoria} onChange={handleChange}
+                className="w-full bg-inputBg border border-border rounded-lg p-2.5 text-sm text-text-primary outline-none focus:border-accent"
+                >
+                  <option value="Limpieza">Limpieza</option>
+                  <option value="Higiene">Higiene</option>
+                  <option value="Papeleria">Papeleria</option>
+                  <option value="Mobiliario escolar">Mobiliario escolar</option>
+                  <option value="Servicios Medicos">Servicios Médicos</option>
+                </select>
               </div>
               <div>
                 <label className="block text-[0.7rem] font-heading font-bold uppercase text-text-muted mb-1.5">Unidad Base *</label>

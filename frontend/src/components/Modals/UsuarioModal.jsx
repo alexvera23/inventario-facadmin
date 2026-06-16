@@ -7,7 +7,7 @@ export default function UsuarioModal({ isOpen, onClose, onSuccess }) {
     id_interno: '',
     nombre: '',
     correo: '',
-    departamento: '',
+    departamento: 'Sistemas',
     rol: 'SOLICITANTE'
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -99,11 +99,16 @@ export default function UsuarioModal({ isOpen, onClose, onSuccess }) {
 
           <div>
             <label className="block text-[0.7rem] font-heading font-bold uppercase text-text-muted mb-1.5">Departamento de Adscripción *</label>
-            <input 
-              type="text" name="departamento" required value={formData.departamento} onChange={handleChange}
-              placeholder="Ej. Ciencias de la Computación" 
-              className="w-full bg-inputBg border border-border rounded-lg p-2.5 text-sm text-text-primary outline-none focus:border-accent"
-            />
+            <select 
+              name="departamento" required value={formData.departamento} onChange={handleChange}
+              className='w-full bg-inputBg border border-border rounded-lg p-2.5 text-sm text-text-primary outline-none focus:border-accent'
+              >
+                <option value="Sistemas">Sistemas</option>
+                <option value="Mantenimiento">Mantenimiento</option>
+                <option value="Intendencia">Intendencia y Limpieza</option>
+                <option value="Prefectura">Prefectura</option>
+                <option value="Otros">Otros</option>
+            </select>
           </div>
 
           <div>

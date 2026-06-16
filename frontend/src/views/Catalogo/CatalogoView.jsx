@@ -3,6 +3,7 @@ import DetailDrawer from './DetailDrawer';
 import ReportModal from './ReportModal';
 import api from '../../services/api';
 import InsumoModal from '../../components/Modals/InsumoModal';
+import EditInsumoModal from '../../components/Modals/EditInsumoModal';
 
 export default function CatalogoView() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -14,6 +15,7 @@ export default function CatalogoView() {
   const [insumos, setInsumos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isInsumoModalOpen, setIsInsumoModalOpen]= useState(false);
+  const [isEditInsumoModalOpen, setIsEditModalOpen] = useState(false);
 
   useEffect(() => {
     fetchProductos();
@@ -71,6 +73,10 @@ export default function CatalogoView() {
     setIsDrawerOpen(false);
     setIsReportModalOpen(true);
   };
+  const handleOpenEdit = (producto) =>{
+    setIsDrawerOpen(false);
+    setIsEditModalOpen(true);
+  }
 
   return (
     <div className="flex flex-col h-full animate-fade-in">
@@ -167,6 +173,7 @@ export default function CatalogoView() {
         onClose={() => setIsDrawerOpen(false)} 
         producto={selectedProduct} 
         onOpenReport={handleOpenReport}
+        onOpenEdit={handleOpenEdit}
       />
 
       {/* Instancia del Modal de Reportes */}
@@ -182,6 +189,15 @@ export default function CatalogoView() {
         onClose={() => setIsInsumoModalOpen(false)}
         onSuccess={fetchProductos}
         />
+      
+      {/*Formulario modal de edición */}
+      <EditInsumoModal
+        isOpen={isEditInsumoModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        onSuccess={fetchProductos}
+        insumo={selectedProduct} 
+        />
+
     </div>
   );
 }

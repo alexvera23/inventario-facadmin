@@ -21,7 +21,7 @@ const timeAgo = (dateString) => {
   return `Hace ${diffInDays} días`;
 };
 
-export default function UserDrawer({ isOpen, onClose, usuario, onOpenReport }) {
+export default function UserDrawer({ isOpen, onClose, usuario, onOpenReport, onOpenEdit }) {
   // --------------------------------------------------------
   // ESTADOS DEL DRAWER
   // --------------------------------------------------------
@@ -236,7 +236,9 @@ export default function UserDrawer({ isOpen, onClose, usuario, onOpenReport }) {
         {/* Footer Actions */}
         <div className="p-4 border-t border-border bg-app flex flex-col gap-2">
           <div className="grid grid-cols-2 gap-2">
-            <button className="bg-inputBg border border-border text-text-primary hover:border-accent rounded-lg font-heading font-semibold text-[0.75rem] py-2 transition-colors">
+            <button 
+              onClick={() => onOpenEdit(usuario)}
+              className="bg-inputBg border border-border text-text-primary hover:border-accent rounded-lg font-heading font-semibold text-[0.75rem] py-2 transition-colors">
               Editar usuario
             </button>
             <button className="bg-text-primary text-app hover:opacity-85 rounded-lg font-heading font-semibold text-[0.75rem] py-2 transition-opacity dark:bg-accent dark:text-[#002D4C]">

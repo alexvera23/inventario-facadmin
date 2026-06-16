@@ -4,6 +4,7 @@ import ReportModal from '../Catalogo/ReportModal';
 import { toastService } from '../../services/toastService';
 import api from '../../services/api';
 import UsuarioModal from '../../components/Modals/UsuarioModal';
+import EditUsuarioModal from '../../components/Modals/EditUsuarioModal';
 
 export default function UsuariosView() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -11,6 +12,7 @@ export default function UsuariosView() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isUserModalOpen, setIsUserModalOpen]= useState(false);
+  const [isEditUsuarioModal, setIsEditModalOpen] = useState(false);
 
   // --------------------------------------------------------
   // ESTADOS PARA DATOS REALES DE LA API
@@ -78,6 +80,10 @@ export default function UsuariosView() {
   const handleOpenReport = (usuario) => {
     setIsDrawerOpen(false); 
     setIsReportModalOpen(true); 
+  };
+  const handleOpenEdit = (usuario) => {
+    setIsDrawerOpen(false); // Cierra el panel lateral de fondo
+    setIsEditModalOpen(true); // Abre el modal de edición al frente
   };
 
   return (
@@ -195,6 +201,7 @@ export default function UsuariosView() {
         onClose={() => setIsDrawerOpen(false)} 
         usuario={selectedUser} 
         onOpenReport={handleOpenReport}
+        onOpenEdit={handleOpenEdit}
       />
 
       {/* Report Modal Reutilizado */}
@@ -210,6 +217,14 @@ export default function UsuariosView() {
       isOpen={isUserModalOpen}
       onClose={()=> setIsUserModalOpen(false)}
       onSuccess={fetchUsuarios}
+      />
+
+      {/* Formulario modal de edicion */}
+      <EditUsuarioModal
+      isOpen={isEditUsuarioModal}
+      onClose={() => setIsEditModalOpen(false)}
+      onSuccess={fetchUsuarios}
+      usuario={selectedUser}
       />
 
     </div>
