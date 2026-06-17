@@ -6,6 +6,7 @@ const prisma = require('./config/db');
 const productoRoutes = require('./routes/productoRoutes');
 const movimientoRoutes = require('./routes/movimientoRoutes');
 const reporteRoutes = require('./routes/reporteRoutes');
+const usuarioRoutes = require('./routes/usuarioRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -49,25 +50,9 @@ app.get('/api/health', async (req, res) => {
 app.use('/api/productos', productoRoutes);
 app.use('/api/movimientos',movimientoRoutes);
 app.use('/api/reportes',reporteRoutes);
+app.use('/api/usuarios',usuarioRoutes);
 
-// Health check de la base de datos
-app.get('/api/health', async (req, res) => {
-    try {
-        await prisma.$queryRaw`SELECT 1`;
-        return res.status(200).json({
-            status: 'ok',
-            message: 'Servidor FacAdmin operativo',
-            database: 'Conectada exitosamente en entorno Docker'
-        });
-    } catch (error) {
-        console.error(' Error en el Health Check:', error);
-        return res.status(500).json({
-            status: 'error',
-            message: 'El servidor está vivo pero la base de datos no responde',
-            error: error.message
-        });
-    }
-});
+
 
 
 // ==========================================

@@ -4,48 +4,60 @@ class MovimientoController {
     // POST /api/movimientos
     async crearMovimiento(req, res) {
         try {
-            const { productoId, cantidad, solicitanteId, encargadoId, embalajeId, tipo, observaciones } = req.body;
+            const { tipo, solicitanteId, encargadoId, observaciones, items } = req.body;
 
-            // Validaciones obligatorias generales
-            if (!productoId || !cantidad || !solicitanteId || !encargadoId || !tipo) {
+            // Validaciones estructurales
+            if (!tipo || !encargadoId || !items) {
                 return res.status(400).json({ 
-                    message: 'Los campos productoId, cantidad, solicitanteId, encargadoId y tipo son estrictamente obligatorios.' 
+                    message: 'Los campos tipo, encargadoId e items son estrictamente obligatorios.' 
                 });
             }
 
-            if (parseFloat(cantidad) <= 0) {
-                return res.status(400).json({ message: 'La cantidad debe ser un número mayor a cero.' });
-            }
-
-            const resultado = await movimientoService.registrarMovimiento({
-                productoId,
-                cantidad,
+            const resultado = await movimientoService.registrarMovimientoMasivo({
+                tipo: tipo.toUpperCase(),
                 solicitanteId,
                 encargadoId,
-                embalajeId,
-                tipo: tipo.toUpperCase(), // Asegura que vaya en mayúsculas
-                observaciones
+                observaciones,
+                items
             });
 
             return res.status(201).json({
-                message: `Movimiento de tipo ${tipo.toUpperCase()} registrado exitosamente.`,
+                message: `Transacción de ${tipo.toUpperCase()} procesada con éxito. Se registraron ${resultado.length} movimientos.`,
                 data: resultado
             });
 
         } catch (error) {
+            // Manejo de errores dinámicos (Ej: STOCK_INSUFICIENTE:Cloro Líquido)
+            if (error.message.startsWith('STOCK_INSUFICIENTE:')) {
+                const productoAfectado = error.message.split(':')[1];
+                return res.status(422).json({ 
+                    message: `Operación cancelada: Stock insuficiente para el insumo "${productoAfectado}".` 
+                });
+            }
+            if (error.message.startsWith('EMBALAJE_INVALIDO:')) {
+                const productoAfectado = error.message.split(':')[1];
+                return res.status(400).json({ 
+                    message: `La regla de embalaje no corresponde al insumo "${productoAfectado}".` 
+                });
+            }
+            if (error.message.startsWith('PRODUCTO_NOT_FOUND:')) {
+                return res.status(404).json({ message: 'Uno de los insumos del carrito ya no existe en la base de datos.' });
+            }
+
+            // Errores fijos
             switch (error.message) {
+                case 'CARRITO_VACIO':
+                    return res.status(400).json({ message: 'El carrito de insumos no puede estar vacío.' });
                 case 'TIPO_MOVIMIENTO_INVALIDO':
                     return res.status(400).json({ message: 'El tipo de movimiento debe ser ENTRADA o SALIDA.' });
-                case 'PRODUCTO_NOT_FOUND':
-                    return res.status(404).json({ message: 'El insumo especificado no existe.' });
+                case 'ENCARGADO_NOT_FOUND':
+                    return res.status(404).json({ message: 'El usuario encargado de almacén no es válido.' });
                 case 'SOLICITANTE_NOT_FOUND':
-                    return res.status(404).json({ message: 'El usuario asociado no se encuentra registrado.' });
-                case 'EMBALAJE_INVALIDO':
-                    return res.status(400).json({ message: 'La regla de embalaje no corresponde a este producto.' });
-                case 'STOCK_INSUFICIENTE':
-                    return res.status(422).json({ message: 'Operación denegada: Inventario insuficiente para la salida.' });
+                    return res.status(404).json({ message: 'El usuario solicitante no se encuentra registrado.' });
+                case 'SOLICITANTE_REQUERIDO_PARA_SALIDA':
+                    return res.status(400).json({ message: 'Debe especificar a qué usuario se le están entregando los insumos.' });
                 default:
-                    console.error(' Error crítico en movimientos:', error);
+                    console.error('Error crítico en movimientos masivos:', error);
                     return res.status(500).json({ message: 'Error interno en el servidor.' });
             }
         }
