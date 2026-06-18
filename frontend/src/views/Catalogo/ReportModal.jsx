@@ -1,12 +1,3 @@
-/**
- * ReportModal.jsx — FacAdmin / BUAP
- * Modal de Reporte Personalizado con generación real de PDF y Excel.
- *
- * Dependencias a instalar:
- *   npm install jspdf html2canvas chart.js xlsx
- *   (chart.js y xlsx ya deberían estar en el proyecto)
- */
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Chart as ChartJS,
@@ -34,11 +25,11 @@ const PALETTE = {
 
 const CHART_COLORS = [PALETTE.navy, PALETTE.cyan, PALETTE.emerald, PALETTE.amber, PALETTE.violet, PALETTE.rose];
 
-// ─── Opciones Chart.js ─────────────────────────────────────────────────────
+// ─── Opciones Chart.js (UI preview) ───────────────────────────────────────
 const commonChartOpts = {
   responsive: true,
   maintainAspectRatio: false,
-  animation: false, // Sin animación para capturas de pantalla
+  animation: false,
   plugins: {
     legend: { position: 'top', labels: { color: '#94A3B8', font: { family: 'Manrope', size: 11 } } },
     tooltip: { backgroundColor: '#1E293B', titleColor: '#F1F5F9', bodyColor: '#94A3B8' }
@@ -112,16 +103,158 @@ function Section({ title, children }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// UTILIDADES DE EXPORTACIÓN
+// RENDERIZADO OFFSCREEN EN ALTA DEFINICIÓN
 // ══════════════════════════════════════════════════════════════════════════════
 
-/** Captura un canvas de Chart.js como base64 PNG */
-async function captureChartAsImage(chartRef) {
-  if (!chartRef?.current) return null;
-  const canvas = chartRef.current.canvas;
-  if (!canvas) return null;
-  return canvas.toDataURL('image/png');
+/**
+ * Opciones base para charts offscreen (fondo blanco, colores legibles en PDF).
+ * Se generan con dimensiones fijas 1600×700 → ~216 dpi en A4 sin escalado.
+ */
+const OFFSCREEN_BASE_OPTS = {
+  animation: false,
+  responsive: false,       // ← CLAVE: tamaño absoluto, Chart.js no redimensiona
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      position: 'top',
+      labels: { color: '#1E293B', font: { family: 'Helvetica', size: 22 }, padding: 24 },
+    },
+    tooltip: { enabled: false },
+  },
+  scales: {
+    y: {
+      grid: { color: 'rgba(0,0,0,0.08)' },
+      ticks: { color: '#334155', font: { size: 18 } },
+    },
+    x: {
+      grid: { display: false },
+      ticks: { color: '#334155', font: { size: 18 }, maxRotation: 45 },
+    },
+  },
+};
+
+const OFFSCREEN_DOUGHNUT_OPTS = {
+  animation: false,
+  responsive: false,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      position: 'right',
+      labels: { color: '#1E293B', font: { family: 'Helvetica', size: 22 }, padding: 20 },
+    },
+    tooltip: { enabled: false },
+  },
+  cutout: '60%',
+};
+
+const OFFSCREEN_HBAR_OPTS = {
+  ...OFFSCREEN_BASE_OPTS,
+  indexAxis: 'y',
+  plugins: {
+    ...OFFSCREEN_BASE_OPTS.plugins,
+    legend: { display: false },
+  },
+  scales: {
+    x: {
+      grid: { color: 'rgba(0,0,0,0.08)' },
+      ticks: { color: '#334155', font: { size: 18 } },
+    },
+    y: {
+      grid: { display: false },
+      ticks: { color: '#334155', font: { size: 18 } },
+    },
+  },
+};
+
+/**
+ * Renderiza una gráfica Chart.js en un canvas en memoria (fuera del DOM),
+ * la exporta como PNG base64 en alta resolución y destruye la instancia.
+ *
+ * @param {'line'|'bar'|'doughnut'} type  - Tipo de gráfica
+ * @param {object}  chartData             - { labels, datasets }
+ * @param {object}  extraOpts             - Opciones adicionales a mezclar
+ * @param {number}  [width=1600]          - Ancho del canvas en px
+ * @param {number}  [height=700]          - Alto del canvas en px
+ * @returns {Promise<string|null>}        - dataURL PNG o null si falla
+ */
+async function renderChartOffscreen(type, chartData, extraOpts = {}, width = 1600, height = 700) {
+  if (!chartData?.labels?.length && !chartData?.datasets?.some(d => d.data?.length)) {
+    return null;
+  }
+
+  // Seleccionar opciones base según tipo
+  let baseOpts;
+  if (type === 'doughnut') {
+    baseOpts = OFFSCREEN_DOUGHNUT_OPTS;
+  } else if (extraOpts._isHorizontal) {
+    baseOpts = OFFSCREEN_HBAR_OPTS;
+  } else {
+    baseOpts = OFFSCREEN_BASE_OPTS;
+  }
+
+  // Mezcla profunda segura de opciones (sin la flag interna)
+  const { _isHorizontal, ...cleanExtra } = extraOpts;
+  const finalOpts = deepMerge(baseOpts, cleanExtra);
+
+  // Crear canvas fuera del DOM
+  const canvas = document.createElement('canvas');
+  canvas.width  = width;
+  canvas.height = height;
+
+  // Fondo blanco explícito
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, width, height);
+
+  // Instanciar Chart.js
+  let chartInstance = null;
+  try {
+    chartInstance = new ChartJS(canvas, {
+      type,
+      data: chartData,
+      options: finalOpts,
+    });
+
+    // Forzar render síncrono
+    chartInstance.update('none');
+
+    const dataURL = canvas.toDataURL('image/png', 1.0);
+    return dataURL;
+  } catch (err) {
+    console.error('[renderChartOffscreen] Error:', err);
+    return null;
+  } finally {
+    // Destruir siempre para liberar RAM
+    if (chartInstance) {
+      chartInstance.destroy();
+    }
+  }
 }
+
+/** Merge profundo simple (solo objetos planos, no arrays) */
+function deepMerge(base, override) {
+  if (!override || typeof override !== 'object') return base;
+  const result = { ...base };
+  for (const key of Object.keys(override)) {
+    if (
+      override[key] !== null &&
+      typeof override[key] === 'object' &&
+      !Array.isArray(override[key]) &&
+      typeof base[key] === 'object' &&
+      base[key] !== null &&
+      !Array.isArray(base[key])
+    ) {
+      result[key] = deepMerge(base[key], override[key]);
+    } else {
+      result[key] = override[key];
+    }
+  }
+  return result;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// UTILIDADES DE EXPORTACIÓN
+// ══════════════════════════════════════════════════════════════════════════════
 
 /**
  * Genera el Excel (.xlsx) a partir de los datos del reporte.
@@ -173,7 +306,6 @@ async function generarExcel({ scope, labelMes, kpis, data, labelScope }) {
     ws['!cols'] = [{ wch: 14 }, { wch: 12 }, { wch: 12 }];
     XLSX.utils.book_append_sheet(wb, ws, 'Tendencia');
 
-    // Top Insumos
     if (data.topInsumos?.labels?.length) {
       const rowsIns = [['Producto', 'Volumen Salida']];
       data.topInsumos.labels.forEach((l, i) => rowsIns.push([l, data.topInsumos.data[i]]));
@@ -182,7 +314,6 @@ async function generarExcel({ scope, labelMes, kpis, data, labelScope }) {
       XLSX.utils.book_append_sheet(wb, wsIns, 'Top Insumos');
     }
 
-    // Departamentos
     if (data.departamentos?.labels?.length) {
       const rowsDept = [['Departamento', 'Solicitudes']];
       data.departamentos.labels.forEach((l, i) => rowsDept.push([l, data.departamentos.data[i]]));
@@ -192,9 +323,10 @@ async function generarExcel({ scope, labelMes, kpis, data, labelScope }) {
     }
   }
 
-  if (scope === 'insumo' && data?.historial) {
+  if (scope === 'insumo' && (data?.movimientos !== undefined || data?.historial !== undefined)) {
+    const historial = data.movimientos ?? data.historial ?? [];
     const rows = [['Fecha', 'Tipo', 'Cantidad', 'Involucrado', 'Departamento', 'Observaciones']];
-    data.historial.forEach(m => {
+    historial.forEach(m => {
       rows.push([
         new Date(m.fecha).toLocaleDateString('es-MX'),
         m.tipo,
@@ -227,20 +359,22 @@ async function generarExcel({ scope, labelMes, kpis, data, labelScope }) {
     XLSX.utils.book_append_sheet(wb, ws, 'Actividad');
   }
 
-  // Descargar
   const filename = `reporte_facdamin_${scope}_${labelMes.replace(' ', '_')}.xlsx`;
   XLSX.writeFile(wb, filename);
 }
 
 /**
- * Genera el PDF usando jsPDF + captura de canvas de Chart.js.
- * NO necesita html2canvas para el layout: lo construimos con la API de jsPDF.
+ * Genera el PDF usando jsPDF + gráficas renderizadas en canvas offscreen.
+ * Cada gráfica se fabrica en memoria a 1600×700px, se exporta y se destruye.
  */
-async function generarPDF({ scope, labelMes, kpis, data, labelScope, chartRefs, incluir }) {
+async function generarPDF({ scope, labelMes, kpis, data, labelScope, incluir,
+                             /* chartRefs ya no se usa, se mantiene por compatibilidad */
+                             lineChartData, doughnutData, topInsumosData, deptosData,
+                             insumoChartData, usuarioChartData }) {
   const { default: jsPDF } = await import('jspdf');
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const W = 210; // mm A4
+  const W = 210;
   const MARGIN = 14;
   const CONTENT_W = W - MARGIN * 2;
 
@@ -255,41 +389,29 @@ async function generarPDF({ scope, labelMes, kpis, data, labelScope, chartRefs, 
 
   let y = 0;
 
-  // ── Helper: nueva página con header ────────────────────────────────────
   const addPage = () => {
     doc.addPage();
     drawHeader();
     y = 38;
   };
 
-  // ── Helper: asegurar que cabe en la página ─────────────────────────────
   const ensureSpace = (needed) => {
     if (y + needed > 280) addPage();
   };
 
-  // ── Header de página ───────────────────────────────────────────────────
   const drawHeader = () => {
-    // Barra superior navy
     doc.setFillColor(...NAVY);
     doc.rect(0, 0, W, 20, 'F');
-
-    // Acento cyan
     doc.setFillColor(...CYAN);
     doc.rect(0, 20, W, 2, 'F');
-
-    // Logo text
     doc.setTextColor(...WHITE);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(13);
     doc.text('BUAP · FacAdmin', MARGIN, 13);
-
-    // Subtítulo derecho
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(...GRAY);
     doc.text('Sistema de Administración de Inventario', W - MARGIN, 13, { align: 'right' });
-
-    // Línea de meta-info
     doc.setFillColor(...LIGHT);
     doc.rect(0, 22, W, 12, 'F');
     doc.setTextColor(60, 80, 100);
@@ -301,7 +423,6 @@ async function generarPDF({ scope, labelMes, kpis, data, labelScope, chartRefs, 
     doc.text(`Generado: ${new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })}`, W - MARGIN, 30, { align: 'right' });
   };
 
-  // ── Helper: sección título ─────────────────────────────────────────────
   const drawSectionTitle = (title) => {
     ensureSpace(12);
     doc.setFillColor(...NAVY);
@@ -313,7 +434,6 @@ async function generarPDF({ scope, labelMes, kpis, data, labelScope, chartRefs, 
     y += 12;
   };
 
-  // ── Helper: tarjeta KPI ─────────────────────────────────────────────────
   const drawKpiRow = (kpiList) => {
     ensureSpace(22);
     const cardW = (CONTENT_W - (kpiList.length - 1) * 3) / kpiList.length;
@@ -323,18 +443,15 @@ async function generarPDF({ scope, labelMes, kpis, data, labelScope, chartRefs, 
       doc.roundedRect(x, y, cardW, 20, 2, 2, 'F');
       doc.setDrawColor(210, 220, 230);
       doc.roundedRect(x, y, cardW, 20, 2, 2, 'S');
-
       doc.setTextColor(...GRAY);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(7);
       doc.text(kpi.label.toUpperCase(), x + cardW / 2, y + 5, { align: 'center' });
-
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(16);
       const valColor = kpi.danger ? RED : kpi.success ? GREEN : NAVY;
       doc.setTextColor(...valColor);
       doc.text(String(kpi.value ?? '0'), x + cardW / 2, y + 14, { align: 'center' });
-
       if (kpi.sub) {
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(6.5);
@@ -345,22 +462,21 @@ async function generarPDF({ scope, labelMes, kpis, data, labelScope, chartRefs, 
     y += 25;
   };
 
-  // ── Helper: insertar imagen de gráfica ─────────────────────────────────
-  const addChartImage = async (chartRef, altLabel, chartH = 58) => {
-    if (!chartRef?.current) return;
-    const imgData = await captureChartAsImage(chartRef);
+  /**
+   * Inserta en el PDF una imagen PNG generada offscreen.
+   * @param {string|null} imgData - dataURL PNG
+   * @param {number} chartH       - alto en mm dentro del PDF
+   */
+  const addChartPNG = (imgData, chartH = 58) => {
     if (!imgData) return;
     ensureSpace(chartH + 4);
     doc.addImage(imgData, 'PNG', MARGIN, y, CONTENT_W, chartH);
     y += chartH + 4;
   };
 
-  // ── Helper: tabla simple ───────────────────────────────────────────────
   const drawTable = (headers, rows, colWidths) => {
     const rowH = 7;
     const totalW = colWidths.reduce((a, b) => a + b, 0);
-
-    // Cabecera
     ensureSpace(rowH + 2);
     doc.setFillColor(...NAVY);
     doc.rect(MARGIN, y, totalW, rowH, 'F');
@@ -373,8 +489,6 @@ async function generarPDF({ scope, labelMes, kpis, data, labelScope, chartRefs, 
       cx += colWidths[i];
     });
     y += rowH;
-
-    // Filas
     rows.forEach((row, ri) => {
       ensureSpace(rowH);
       doc.setFillColor(ri % 2 === 0 ? 248 : 255, ri % 2 === 0 ? 250 : 255, ri % 2 === 0 ? 252 : 255);
@@ -388,7 +502,6 @@ async function generarPDF({ scope, labelMes, kpis, data, labelScope, chartRefs, 
       row.forEach((cell, j) => {
         const cellStr = String(cell ?? '');
         const maxW = colWidths[j] - 3;
-        // Truncar si es muy largo
         const truncated = doc.getStringUnitWidth(cellStr) * 7 / doc.internal.scaleFactor > maxW
           ? doc.splitTextToSize(cellStr, maxW)[0] + '…'
           : cellStr;
@@ -407,7 +520,6 @@ async function generarPDF({ scope, labelMes, kpis, data, labelScope, chartRefs, 
   drawHeader();
   y = 38;
 
-  // ── TÍTULO DEL REPORTE ─────────────────────────────────────────────────
   doc.setTextColor(...NAVY);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
@@ -423,7 +535,6 @@ async function generarPDF({ scope, labelMes, kpis, data, labelScope, chartRefs, 
   // SCOPE: GLOBAL
   // ══════════════════════════════════════════════════════════════════════════
   if (scope === 'global' && data) {
-    // KPIs
     if (incluir.kpis) {
       drawSectionTitle('Indicadores Clave (KPIs)');
       drawKpiRow([
@@ -434,32 +545,37 @@ async function generarPDF({ scope, labelMes, kpis, data, labelScope, chartRefs, 
       ]);
     }
 
-    // Gráfica Tendencia
-    if (incluir.graficaTendencia && chartRefs?.lineChart) {
-      drawSectionTitle('Tendencia de Inventario');
-      await addChartImage(chartRefs.lineChart, 'Tendencia', 62);
+    if (incluir.graficaTendencia) {
+      // ── Tendencia (línea) ────────────────────────────────────────────────
+      if (lineChartData?.labels?.length) {
+        drawSectionTitle('Tendencia de Inventario');
+        const img = await renderChartOffscreen('line', lineChartData);
+        addChartPNG(img, 62);
+      }
+
+      // ── Categorías (doughnut) ────────────────────────────────────────────
+      if (doughnutData?.labels?.length) {
+        ensureSpace(70);
+        drawSectionTitle('Consumo por Categoría');
+        const img = await renderChartOffscreen('doughnut', doughnutData, {}, 1400, 700);
+        addChartPNG(img, 62);
+      }
+
+      // ── Top Insumos (barra vertical) ─────────────────────────────────────
+      if (topInsumosData?.labels?.length) {
+        drawSectionTitle('Top 5 Insumos Más Solicitados');
+        const img = await renderChartOffscreen('bar', topInsumosData);
+        addChartPNG(img, 58);
+      }
+
+      // ── Departamentos (barra horizontal) ─────────────────────────────────
+      if (deptosData?.labels?.length) {
+        drawSectionTitle('Solicitudes por Departamento');
+        const img = await renderChartOffscreen('bar', deptosData, { _isHorizontal: true });
+        addChartPNG(img, 58);
+      }
     }
 
-    // Gráfica Categorías
-    if (incluir.graficaTendencia && chartRefs?.doughnutChart) {
-      ensureSpace(70);
-      drawSectionTitle('Consumo por Categoría');
-      await addChartImage(chartRefs.doughnutChart, 'Categorias', 62);
-    }
-
-    // Top Insumos
-    if (incluir.graficaTendencia && chartRefs?.topInsumosChart) {
-      drawSectionTitle('Top 5 Insumos Más Solicitados');
-      await addChartImage(chartRefs.topInsumosChart, 'Top Insumos', 58);
-    }
-
-    // Departamentos
-    if (incluir.graficaTendencia && chartRefs?.deptosChart) {
-      drawSectionTitle('Solicitudes por Departamento');
-      await addChartImage(chartRefs.deptosChart, 'Departamentos', 58);
-    }
-
-    // Tabla tendencia
     if (incluir.movimientos && data.tendencia?.labels?.length) {
       drawSectionTitle('Detalle de Movimientos por Día');
       const rows = (data.tendencia.labels || []).map((lbl, i) => [
@@ -475,22 +591,25 @@ async function generarPDF({ scope, labelMes, kpis, data, labelScope, chartRefs, 
   // SCOPE: INSUMO
   // ══════════════════════════════════════════════════════════════════════════
   if (scope === 'insumo' && data) {
+    const stats = data.estadisticas ?? data.kpis ?? {};
     if (incluir.kpis) {
       drawSectionTitle('Indicadores del Producto');
       drawKpiRow([
-        { label: 'Total Entradas', value: data.kpis?.entradas?.toLocaleString('es-MX'), sub: 'abastecidas', success: true },
-        { label: 'Total Salidas',  value: data.kpis?.salidas?.toLocaleString('es-MX'),  sub: 'consumidas' },
+        { label: 'Total Entradas', value: stats.entradas?.toLocaleString('es-MX'), sub: 'abastecidas', success: true },
+        { label: 'Total Salidas',  value: stats.salidas?.toLocaleString('es-MX'),  sub: 'consumidas' },
       ]);
     }
 
-    if (incluir.graficaTendencia && chartRefs?.insumoChart) {
+    if (incluir.graficaTendencia && insumoChartData?.labels?.length) {
       drawSectionTitle('Histograma de Movimientos');
-      await addChartImage(chartRefs.insumoChart, 'Histograma', 62);
+      const img = await renderChartOffscreen('bar', insumoChartData);
+      addChartPNG(img, 62);
     }
 
-    if (incluir.movimientos && data.historial?.length) {
+    const historial = data.movimientos ?? data.historial ?? [];
+    if (incluir.movimientos && historial.length) {
       drawSectionTitle('Historial de Movimientos');
-      const rows = data.historial.map(m => [
+      const rows = historial.map(m => [
         new Date(m.fecha).toLocaleDateString('es-MX'),
         m.tipo,
         m.cantidad,
@@ -509,27 +628,30 @@ async function generarPDF({ scope, labelMes, kpis, data, labelScope, chartRefs, 
   // ══════════════════════════════════════════════════════════════════════════
   // SCOPE: USUARIO
   // ══════════════════════════════════════════════════════════════════════════
-  if (scope === 'usuario' && Array.isArray(data)) {
-    const entradas = data.filter(m => m.tipo === 'ENTRADA').length;
-    const salidas  = data.filter(m => m.tipo === 'SALIDA').length;
+  const usuarioRows = Array.isArray(data) ? data : (data?.datos ?? []);
+
+  if (scope === 'usuario' && usuarioRows.length >= 0) {
+    const entradas = usuarioRows.filter(m => m.tipo === 'ENTRADA').length;
+    const salidas  = usuarioRows.filter(m => m.tipo === 'SALIDA').length;
 
     if (incluir.kpis) {
       drawSectionTitle('Indicadores del Usuario');
       drawKpiRow([
-        { label: 'Total Movimientos', value: data.length,   sub: 'en el período' },
+        { label: 'Total Movimientos', value: usuarioRows.length,   sub: 'en el período' },
         { label: 'Entradas',          value: entradas,      sub: 'procesadas', success: true },
         { label: 'Salidas / Pedidos', value: salidas,       sub: 'solicitadas' },
       ]);
     }
 
-    if (incluir.graficaTendencia && chartRefs?.usuarioChart) {
+    if (incluir.graficaTendencia && usuarioChartData?.labels?.length) {
       drawSectionTitle('Actividad del Usuario');
-      await addChartImage(chartRefs.usuarioChart, 'Actividad', 62);
+      const img = await renderChartOffscreen('bar', usuarioChartData);
+      addChartPNG(img, 62);
     }
 
-    if (incluir.movimientos && data.length) {
+    if (incluir.movimientos && usuarioRows.length) {
       drawSectionTitle('Detalle de Actividad');
-      const rows = data.map(m => [
+      const rows = usuarioRows.map(m => [
         new Date(m.fecha).toLocaleDateString('es-MX'),
         m.tipo,
         m.producto?.nombre || '—',
@@ -573,7 +695,7 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
   const [periodo, setPeriodo]   = useState('semana');
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin,    setFechaFin]    = useState('');
-  const [modoPeriodo, setModoPeriodo] = useState('mes'); // 'mes' | 'personalizado'
+  const [modoPeriodo, setModoPeriodo] = useState('mes');
 
   const [incluir, setIncluir] = useState({
     movimientos:      true,
@@ -590,9 +712,9 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
   const [previewData, setPreviewData] = useState(null);
   const [cargando,    setCargando]    = useState(false);
   const [error,       setError]       = useState(null);
-  const [generando,   setGenerando]   = useState(null); // 'pdf' | 'excel' | null
+  const [generando,   setGenerando]   = useState(null);
 
-  // ── Refs de los charts para captura ───────────────────────────────────
+  // ── Refs de los charts para la previsualización UI (sin cambios) ───────
   const lineChartRef     = useRef(null);
   const doughnutChartRef = useRef(null);
   const topInsumosRef    = useRef(null);
@@ -613,7 +735,6 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
   // ── Cargar catálogos al montar ─────────────────────────────────────────
   useEffect(() => {
     if (!isOpen) return;
-    // Carga productos (ajusta el endpoint a tu API)
     api.get('/productos?limite=200').then(r => setCatalogoProductos(r.data?.datos || r.data || [])).catch(() => {});
     api.get('/usuarios?limite=200').then(r => setCatalogoUsuarios(r.data?.datos || r.data || [])).catch(() => {});
   }, [isOpen]);
@@ -648,7 +769,6 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
     }
   }, [scope, subjectId, mesSeleccionado, periodo, modoPeriodo]);
 
-  // ── Re-fetch cuando cambia scope o sujeto ─────────────────────────────
   useEffect(() => {
     if (isOpen) fetchPreview();
   }, [scope, subjectId, mesSeleccionado, periodo, modoPeriodo, isOpen, fetchPreview]);
@@ -671,9 +791,11 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
   // ── Datos derivados para charts ────────────────────────────────────────
   const globalData    = previewData?.tipo === 'global'   ? previewData.data : null;
   const insumoData    = previewData?.tipo === 'insumo'   ? previewData.data : null;
-  const usuarioData   = previewData?.tipo === 'usuario'  ? previewData.data?.datos : null;
+  const usuarioData   = previewData?.tipo === 'usuario'
+    ? (Array.isArray(previewData.data) ? previewData.data : (previewData.data?.datos ?? []))
+    : null;
 
-  // Datasets globales
+  // ── Datasets (compartidos entre preview UI y generación offscreen) ─────
   const lineChartData = globalData ? {
     labels: globalData.tendencia?.labels || [],
     datasets: [
@@ -697,10 +819,10 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
     datasets: [{ label: 'Solicitudes', data: globalData.departamentos?.data || [], backgroundColor: PALETTE.emerald, borderRadius: 6 }]
   } : null;
 
-  // Dataset insumo: histograma por fecha
-  const insumoChartData = insumoData?.movimientos ? (() => {
+  const insumoMovimientos = insumoData?.movimientos ?? insumoData?.historial ?? [];
+  const insumoChartData = insumoMovimientos.length > 0 ? (() => {
     const map = {};
-    insumoData.movimientos.forEach(m => {
+    insumoMovimientos.forEach(m => {
       const lbl = new Date(m.fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
       if (!map[lbl]) map[lbl] = { entradas: 0, salidas: 0 };
       if (m.tipo === 'ENTRADA') map[lbl].entradas += Number(m.cantidad);
@@ -716,7 +838,6 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
     };
   })() : null;
 
-  // Dataset usuario: actividad por tipo
   const usuarioChartData = usuarioData ? (() => {
     const map = {};
     usuarioData.forEach(m => {
@@ -739,28 +860,34 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
     if (!previewData) return;
     setGenerando(formato);
 
-    const rawData = previewData.tipo === 'global'  ? previewData.data
-                  : previewData.tipo === 'insumo'  ? previewData.data
-                  : previewData.data?.datos;
-
     try {
-      const kpis = previewData.tipo === 'global'  ? previewData.data?.kpis
-                 : previewData.tipo === 'insumo'  ? previewData.data?.estadisticas
-                 : null;
+      let kpis, data;
+
+      if (previewData.tipo === 'global') {
+        data = previewData.data;
+        kpis = previewData.data?.kpis;
+      } else if (previewData.tipo === 'insumo') {
+        data = previewData.data;
+        kpis = previewData.data?.estadisticas;
+      } else {
+        data = Array.isArray(previewData.data)
+          ? previewData.data
+          : (previewData.data?.datos ?? []);
+        kpis = null;
+      }
 
       if (formato === 'excel') {
-        await generarExcel({ scope, labelMes, kpis, data: previewData.data || rawData, labelScope });
+        await generarExcel({ scope, labelMes, kpis, data, labelScope });
       } else {
+        // Pasar los datasets calculados para que generarPDF los use en offscreen
         await generarPDF({
-          scope, labelMes, kpis, data: previewData.data || rawData, labelScope, incluir,
-          chartRefs: {
-            lineChart:     lineChartRef,
-            doughnutChart: doughnutChartRef,
-            topInsumosChart: topInsumosRef,
-            deptosChart:   deptosRef,
-            insumoChart:   insumoChartRef,
-            usuarioChart:  usuarioChartRef,
-          }
+          scope, labelMes, kpis, data, labelScope, incluir,
+          lineChartData,
+          doughnutData,
+          topInsumosData,
+          deptosData,
+          insumoChartData,
+          usuarioChartData,
         });
       }
     } catch (e) {
@@ -936,7 +1063,6 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
             {/* Panel de Preview */}
             <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
 
-              {/* Estado: cargando */}
               {cargando && (
                 <div className="flex-1 flex flex-col items-center justify-center gap-3 text-text-muted">
                   <Spinner className="w-8 h-8 text-accent" />
@@ -944,7 +1070,6 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                 </div>
               )}
 
-              {/* Estado: error */}
               {error && !cargando && (
                 <div className="flex items-start gap-3 bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl px-4 py-3 text-sm">
                   <svg className="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -960,7 +1085,6 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                 </div>
               )}
 
-              {/* Estado: necesita sujeto */}
               {!cargando && !error && necesitaSujeto && !subjectId && (
                 <div className="flex-1 flex flex-col items-center justify-center gap-2 text-text-muted">
                   <svg className="w-10 h-10 opacity-30" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
@@ -1200,7 +1324,6 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                 </p>
               )}
 
-              {/* Excel */}
               <button
                 onClick={() => handleExportar('excel')}
                 disabled={!puedeExportar || generando !== null}
@@ -1213,7 +1336,6 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                 Excel
               </button>
 
-              {/* PDF */}
               <button
                 onClick={() => handleExportar('pdf')}
                 disabled={!puedeExportar || generando !== null}
