@@ -1111,7 +1111,7 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
 
                       {incluir.graficaTendencia && (
                         <>
-                          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                          <div className="grid grid-cols-1 lg:grid-cols-1 gap-4">
                             <div className="lg:col-span-2 bg-card border border-border rounded-xl p-4">
                               <p className="text-[0.7rem] font-heading font-bold uppercase tracking-wider text-text-muted mb-3">Tendencia — {labelMes}</p>
                               <div className="h-[180px]">
@@ -1121,6 +1121,8 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                                 }
                               </div>
                             </div>
+                          </div>
+                          <div className='grid grid-cols-1 lg:grid-cols-1 gap-4'>
                             <div className="bg-card border border-border rounded-xl p-4">
                               <p className="text-[0.7rem] font-heading font-bold uppercase tracking-wider text-text-muted mb-3">Por Categoría</p>
                               <div className="h-[180px] flex items-center justify-center">
@@ -1132,7 +1134,7 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                          <div className="grid grid-cols-1 lg:grid-cols-1 gap-4">
                             <div className="bg-card border border-border rounded-xl p-4">
                               <p className="text-[0.7rem] font-heading font-bold uppercase tracking-wider text-text-muted mb-3">Top 5 Insumos</p>
                               <div className="h-[160px]">
@@ -1142,6 +1144,8 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                                 }
                               </div>
                             </div>
+                          </div>
+                          <div className='grid grid-cols-1 lg:grid-cols-1 gap-4'>
                             <div className="bg-card border border-border rounded-xl p-4">
                               <p className="text-[0.7rem] font-heading font-bold uppercase tracking-wider text-text-muted mb-3">Por Departamento</p>
                               <div className="h-[160px]">
@@ -1151,12 +1155,14 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                                 }
                               </div>
                             </div>
+
                           </div>
+
                         </>
                       )}
 
                       {incluir.movimientos && globalData.tendencia?.labels?.length > 0 && (
-                        <div className="bg-card border border-border rounded-xl overflow-hidden">
+                        <div className="bg-card border border-border rounded-xl overflow-hidden shrink-0 mb-10 shadow-sm">
                           <div className="px-4 py-2.5 border-b border-border">
                             <p className="text-[0.7rem] font-heading font-bold uppercase tracking-wider text-text-muted">Movimientos por Día</p>
                           </div>
