@@ -26,7 +26,7 @@ model Usuario {
   id              Int          @id @default(autoincrement())
   id_interno      String       @unique @db.VarChar(20)
   nombre          String       @db.VarChar(100)
-  correo          String?      @db.VarChar(100)j
+  correo          String?      @db.VarChar(100)
   departamento    String       @db.VarChar(50)
   rol             Rol
   
@@ -95,7 +95,7 @@ model Auditoria {
   entidad          String   @db.VarChar(50)  
   entidad_id       Int?     
   detalles         String?  @db.Text         
-  fecha            DateTime @default(now()) // 🚀 Corregido: Igualado a los estándares de la versión 7
+  fecha            DateTime @default(now()) //  Corregido: Igualado a los estándares de la versión 7
 
   usuario          Usuario  @relation(fields: [usuario_id], references: [id], onDelete: Restrict)
 
