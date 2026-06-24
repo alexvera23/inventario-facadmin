@@ -28,7 +28,7 @@ model Usuario {
   id              Int          @id @default(autoincrement())
   id_interno      String       @unique @db.VarChar(20)
   nombre          String       @db.VarChar(100)
-  correo          String?      @db.VarChar(100)
+  correo          String?      @db.VarChar(100)j
   departamento    String       @db.VarChar(50)
   rol             Rol
   
