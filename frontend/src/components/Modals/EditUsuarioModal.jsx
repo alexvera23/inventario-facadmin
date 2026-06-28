@@ -9,6 +9,7 @@ export default function EditUsuarioModal({ isOpen, onClose, usuario, onSuccess }
     correo: '',
     departamento: '',
     rol: 'SOLICITANTE',
+    password : '',
     activo: true
   });
   
@@ -24,6 +25,7 @@ export default function EditUsuarioModal({ isOpen, onClose, usuario, onSuccess }
         correo: usuario.correo || '',
         departamento: usuario.departamento || '',
         rol: usuario.rol || 'SOLICITANTE',
+        password: '', // 🚀 BLINDAJE: Siempre inicia vacío para no sobreescribir por accidente
         activo: usuario.activo ?? true
       });
     }
@@ -43,7 +45,13 @@ export default function EditUsuarioModal({ isOpen, onClose, usuario, onSuccess }
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      await api.put(`/usuarios/${usuario.id}`, formData);
+      // 🚀 BLINDAJE: Solo enviamos la contraseña si el usuario escribió algo nuevo
+      const payload = { ...formData };
+      if (!payload.password || payload.password.trim() === '') {
+        delete payload.password;
+      }
+
+      await api.put(`/usuarios/${usuario.id}`, payload);
       toastService.success('Usuario actualizado correctamente.');
       onSuccess();
       onClose();
@@ -108,6 +116,8 @@ export default function EditUsuarioModal({ isOpen, onClose, usuario, onSuccess }
               >
                 <option value="SOLICITANTE">Solicitante</option>
                 <option value="ENCARGADO">Encargado de Almacén</option>
+                {/* Agregado para poder editar correctamente a un administrador */}
+                <option value="ADMIN">Administrador</option>
               </select>
             </div>
           </div>
@@ -135,6 +145,20 @@ export default function EditUsuarioModal({ isOpen, onClose, usuario, onSuccess }
               className="w-full bg-inputBg border border-border rounded-lg p-2.5 text-sm text-text-primary outline-none focus:border-accent"
             />
           </div>
+
+          {/* 🚀 BLINDAJE: Renderizado condicional de la contraseña */}
+          {(formData.rol === 'ADMIN' || formData.rol === 'ENCARGADO') && (
+            <div>
+              <label className="block text-[0.7rem] font-heading font-bold uppercase text-text-muted mb-1.5">
+                Nueva Contraseña <span className="normal-case font-normal opacity-75">(Dejar en blanco para mantener la actual)</span>
+              </label>
+              <input 
+                type="password" name="password" value={formData.password} onChange={handleChange}
+                placeholder="••••••••" 
+                className="w-full bg-inputBg border border-border rounded-lg p-2.5 text-sm text-text-primary outline-none focus:border-accent"
+              />
+            </div>
+          )}
 
           {/* Toggle de Estado */}
           <div className="flex items-center gap-3 p-3 bg-inputBg border border-border rounded-lg mt-2">

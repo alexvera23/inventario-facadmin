@@ -1,4 +1,5 @@
 const prisma = require('../config/db');
+const bcrypt = require('bcryptjs');
 
 class UsuarioService {
     // 1. GET LIGERO: Lista de usuarios + Conteo del mes actual (Para la tabla)
@@ -85,16 +86,25 @@ class UsuarioService {
         };
     }
 
-    // POST: Crear usuario validando matrícula/ID único
+    // POST: Crear usuario validando matrícula/ID único y encriptando contraseña
     async crear(datos) {
         try {
+            // 1. Preparamos el hash de la contraseña si es que el front la envió
+            let passwordHash = null;
+            if (datos.password) {
+                const salt = await bcrypt.genSalt(10);
+                passwordHash = await bcrypt.hash(datos.password, salt);
+            }
+
+            // 2. Guardamos en la base de datos
             return await prisma.usuario.create({
                 data: {
                     id_interno: datos.id_interno,
                     nombre: datos.nombre,
                     correo: datos.correo,
                     departamento: datos.departamento,
-                    rol: datos.rol || 'SOLICITANTE' // Rol por defecto si no se envía
+                    rol: datos.rol || 'SOLICITANTE',
+                    password: passwordHash // 🚀 Se guarda null (Solicitantes) o el string encriptado
                 }
             });
         } catch (error) {
@@ -108,14 +118,27 @@ class UsuarioService {
 
     // PUT: Actualizar información del usuario
     async actualizar(id, datos) {
+        // 1. Armamos el objeto de datos básicos a actualizar
+        const dataToUpdate = {
+            id_interno: datos.id_interno, // Por si corrigen la matrícula
+            nombre: datos.nombre,
+            correo: datos.correo,
+            departamento: datos.departamento,
+            rol: datos.rol,
+            activo: datos.activo // 🚀 Añadimos el estado activo que configuramos en el frontend
+        };
+
+        // 2. Si el frontend nos mandó una nueva contraseña (no venía vacía)
+        // la encriptamos y la agregamos al objeto de actualización
+        if (datos.password) {
+            const salt = await bcrypt.genSalt(10);
+            dataToUpdate.password = await bcrypt.hash(datos.password, salt);
+        }
+
+        // 3. Ejecutamos el update en Prisma
         return await prisma.usuario.update({
             where: { id: parseInt(id) },
-            data: {
-                nombre: datos.nombre,
-                correo: datos.correo,
-                departamento: datos.departamento,
-                rol: datos.rol
-            }
+            data: dataToUpdate
         });
     }
 

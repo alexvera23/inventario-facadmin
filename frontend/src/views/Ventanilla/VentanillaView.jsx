@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
 import { toastService } from '../../services/toastService';
+import { useAuth } from '../../context/AuthContext';
 
 export default function VentanillaView() {
   // --------------------------------------------------------
@@ -10,7 +11,7 @@ export default function VentanillaView() {
   const [solicitante, setSolicitante] = useState(null);
   const [bandeja, setBandeja] = useState([]);
   const [observaciones, setObservaciones] = useState('');
-
+  const { user } = useAuth();
   // --------------------------------------------------------
   // ESTADOS DE DATOS (API) Y BÚSQUEDA
   // --------------------------------------------------------
@@ -134,7 +135,7 @@ export default function VentanillaView() {
       const payload = {
         tipo: tipoMovimiento,
         solicitanteId: solicitante ? solicitante.id : null,
-        encargadoId: 1, // TODO: Aquí deberás poner el ID del usuario logueado usando tu Context de Auth
+        encargadoId: user.id, // TODO: Aquí deberás poner el ID del usuario logueado usando tu Context de Auth
         observaciones: observaciones || null,
         items: itemsPayload
       };
