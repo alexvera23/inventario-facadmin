@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
+import { useAuth } from '../../context/AuthContext'; //  1. Importamos el contexto
 
 // Registro de los componentes de la gráfica de Barras
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
@@ -22,6 +23,9 @@ const timeAgo = (dateString) => {
 };
 
 export default function UserDrawer({ isOpen, onClose, usuario, onOpenReport, onOpenEdit }) {
+  //  2. Extraemos el usuario activo (lo renombramos a currentUser para evitar conflictos)
+  const { user: currentUser } = useAuth(); 
+
   // --------------------------------------------------------
   // ESTADOS DEL DRAWER
   // --------------------------------------------------------
@@ -235,16 +239,24 @@ export default function UserDrawer({ isOpen, onClose, usuario, onOpenReport, onO
 
         {/* Footer Actions */}
         <div className="p-4 border-t border-border bg-app flex flex-col gap-2">
-          <div className="grid grid-cols-2 gap-2">
-            <button 
-              onClick={() => onOpenEdit(usuario)}
-              className="bg-inputBg border border-border text-text-primary hover:border-accent rounded-lg font-heading font-semibold text-[0.75rem] py-2 transition-colors">
-              Editar usuario
-            </button>
+          
+          {/*  3. Modificamos el Grid según el rol del usuario */}
+          <div className={`grid gap-2 ${currentUser?.rol === 'ADMIN' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            
+            {/* Solo se muestra si es ADMIN */}
+            {currentUser?.rol === 'ADMIN' && (
+              <button 
+                onClick={() => onOpenEdit(usuario)}
+                className="bg-inputBg border border-border text-text-primary hover:border-accent rounded-lg font-heading font-semibold text-[0.75rem] py-2 transition-colors">
+                Editar usuario
+              </button>
+            )}
+
             <button className="bg-text-primary text-app hover:opacity-85 rounded-lg font-heading font-semibold text-[0.75rem] py-2 transition-opacity dark:bg-accent dark:text-[#002D4C]">
               Ver historial
             </button>
           </div>
+
           <button 
             onClick={() => onOpenReport(usuario)}
             className="w-full mt-1 bg-card border-2 border-[#10B981]/30 text-[#10B981] hover:bg-[#10B981]/10 rounded-lg font-heading font-semibold text-[0.8rem] py-2.5 flex items-center justify-center gap-2 transition-colors"

@@ -11,6 +11,9 @@ class ReporteService {
             case 'mes':
                 fecha.setMonth(fecha.getMonth() - 1);
                 break;
+            case 'quincena':
+                fecha.setDate(fecha.getDate()-15);
+                break;
             case 'semana':
             default:
                 fecha.setDate(fecha.getDate() - 7);
@@ -92,17 +95,7 @@ class ReporteService {
         if (isNaN(id)) throw new Error('El ID del producto debe ser un número válido');
 
         // 1. Calcular la fecha de inicio según el período solicitado
-        const fechaInicio = new Date();
-        if (periodo === 'semana') {
-            fechaInicio.setDate(fechaInicio.getDate() - 7);
-        } else if (periodo === 'quincena') {
-            fechaInicio.setDate(fechaInicio.getDate() - 15);
-        } else if (periodo === 'mes') {
-            fechaInicio.setMonth(fechaInicio.getMonth() - 1);
-        } else {
-            // Por defecto una semana si mandan basura
-            fechaInicio.setDate(fechaInicio.getDate() - 7);
-        }
+        const fechaInicio = this._calcularFechaInicio(periodo);
 
         // 2. Consultar los movimientos en ese rango de fechas
         const movimientos = await prisma.movimiento.findMany({

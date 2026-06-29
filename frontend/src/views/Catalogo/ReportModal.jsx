@@ -1027,7 +1027,7 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                       <div>
                         <p className="text-[0.68rem] text-text-muted font-bold mb-1">Granularidad</p>
                         <div className="flex gap-1 flex-wrap">
-                          {['semana', 'quincena', 'mes'].map(p => (
+                          {['dia','semana', 'quincena', 'mes'].map(p => (
                             <button key={p} onClick={() => setPeriodo(p)}
                               className={`flex-1 py-1 text-[0.72rem] font-semibold rounded-md transition-all capitalize border ${
                                 periodo === p ? 'bg-accent/10 border-accent text-accent' : 'bg-inputBg border-border text-text-muted hover:border-accent/40'

@@ -1,8 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 datasource db {
   provider = "postgresql"
 }
@@ -32,11 +30,16 @@ model Usuario {
   departamento    String       @db.VarChar(50)
   rol             Rol
   
-  // Relaciones inversas (Un usuario puede tener muchos movimientos)
+  // Credenciales y Estado de Seguridad
+  password        String?      @db.VarChar(255) 
+  activo          Boolean      @default(true)   
+  
+  // Relaciones inversas
   solicitudes     Movimiento[] @relation("SolicitanteRel")
   registros       Movimiento[] @relation("EncargadoRel")
+  auditorias      Auditoria[]  
 
-  @@map("usuarios") // Mapea el modelo a la tabla física "usuarios"
+  @@map("usuarios")
 }
 
 // 3. Modelo de Productos (Catálogo de Insumos)
@@ -48,7 +51,6 @@ model Producto {
   stock_actual  Decimal      @default(0.00) @db.Decimal(10, 2)
   stock_minimo  Decimal      @default(0.00) @db.Decimal(10, 2)
   
-  // Relaciones
   embalajes     Embalaje[]
   movimientos   Movimiento[]
 
@@ -59,16 +61,15 @@ model Producto {
 model Embalaje {
   id                Int      @id @default(autoincrement())
   producto_id       Int
-  nombre_embalaje   String   @db.VarChar(50) // Ej: "Caja con 100", "Porrón 20L"
-  factor_conversion Decimal  @db.Decimal(10, 2) // Ej: 100.00 o 20.00
+  nombre_embalaje   String   @db.VarChar(50)
+  factor_conversion Decimal  @db.Decimal(10, 2)
   
-  // Relación con Producto
   producto          Producto @relation(fields: [producto_id], references: [id], onDelete: Cascade)
 
   @@map("embalajes")
 }
 
-// 5. Modelo de Movimientos (Bitácora de Inventario)
+// 5. Modelo de Movimientos (Bitácora Operativa Regular)
 model Movimiento {
   id             Int            @id @default(autoincrement())
   producto_id    Int
@@ -76,13 +77,27 @@ model Movimiento {
   cantidad       Decimal        @db.Decimal(10, 2)
   solicitante_id Int?
   encargado_id   Int
-  fecha          DateTime       @default(now()) @db.Timestamp
+  fecha          DateTime       @default(now()) // 🚀 Corregido: Prisma v7 gestiona los tipos de fecha nativos de PG de forma automática
   observaciones  String?        @db.Text
 
-  // Relaciones (Llaves Foráneas)
   producto       Producto       @relation(fields: [producto_id], references: [id], onDelete: Restrict)
   solicitante    Usuario?       @relation("SolicitanteRel", fields: [solicitante_id], references: [id], onDelete: SetNull)
   encargado      Usuario        @relation("EncargadoRel", fields: [encargado_id], references: [id], onDelete: Restrict)
 
   @@map("movimientos")
+}
+
+// 6. Modelo de Auditoría (Bitácora de Seguridad)
+model Auditoria {
+  id               Int      @id @default(autoincrement())
+  usuario_id       Int      
+  accion           String   @db.VarChar(100) 
+  entidad          String   @db.VarChar(50)  
+  entidad_id       Int?     
+  detalles         String?  @db.Text         
+  fecha            DateTime @default(now()) //  Corregido: Igualado a los estándares de la versión 7
+
+  usuario          Usuario  @relation(fields: [usuario_id], references: [id], onDelete: Restrict)
+
+  @@map("auditoria")
 }

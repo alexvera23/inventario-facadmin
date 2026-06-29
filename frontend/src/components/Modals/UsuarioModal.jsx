@@ -8,7 +8,8 @@ export default function UsuarioModal({ isOpen, onClose, onSuccess }) {
     nombre: '',
     correo: '',
     departamento: 'Sistemas',
-    rol: 'SOLICITANTE'
+    rol: 'SOLICITANTE',
+    password: '' // 🚀 Inicializamos el campo de contraseña
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -24,11 +25,17 @@ export default function UsuarioModal({ isOpen, onClose, onSuccess }) {
     setIsSubmitting(true);
 
     try {
-      await api.post('/usuarios', formData);
+      // 🚀 BLINDAJE: Si el rol es SOLICITANTE, nos aseguramos de no enviar contraseña
+      const payload = { ...formData };
+      if (payload.rol === 'SOLICITANTE') {
+        delete payload.password;
+      }
+
+      await api.post('/usuarios', payload);
       toastService.success('Usuario registrado exitosamente.');
       
-      // Limpiar formulario
-      setFormData({ id_interno: '', nombre: '', correo: '', departamento: '', rol: 'SOLICITANTE' });
+      // Limpiar formulario completo incluyendo la contraseña
+      setFormData({ id_interno: '', nombre: '', correo: '', departamento: 'Sistemas', rol: 'SOLICITANTE', password: '' });
       
       // Avisar a la vista principal para que recargue la tabla y cerrar modal
       onSuccess();
@@ -84,6 +91,7 @@ export default function UsuarioModal({ isOpen, onClose, onSuccess }) {
               >
                 <option value="SOLICITANTE">Solicitante</option>
                 <option value="ENCARGADO">Encargado de Almacén</option>
+                <option value="ADMIN">Administrador</option>
               </select>
             </div>
           </div>
@@ -119,6 +127,18 @@ export default function UsuarioModal({ isOpen, onClose, onSuccess }) {
               className="w-full bg-inputBg border border-border rounded-lg p-2.5 text-sm text-text-primary outline-none focus:border-accent"
             />
           </div>
+
+          {/* 🚀 BLINDAJE: Renderizado condicional de la contraseña */}
+          {(formData.rol === 'ADMIN' || formData.rol === 'ENCARGADO') && (
+            <div>
+              <label className="block text-[0.7rem] font-heading font-bold uppercase text-text-muted mb-1.5">Contraseña de Acceso *</label>
+              <input 
+                type="password" name="password" required value={formData.password} onChange={handleChange}
+                placeholder="••••••••" 
+                className="w-full bg-inputBg border border-border rounded-lg p-2.5 text-sm text-text-primary outline-none focus:border-accent"
+              />
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex gap-3 mt-4">

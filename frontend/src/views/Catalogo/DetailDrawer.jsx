@@ -3,11 +3,14 @@ import api from '../../services/api';
 // Importaciones de Chart.js
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Filler } from 'chart.js';
 import { Line } from 'react-chartjs-2';
+import { useAuth } from '../../context/AuthContext';
 
 // Registro de los componentes de la gráfica
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Filler);
 
 export default function DetailDrawer({ isOpen, onClose, producto, onOpenReport, onOpenEdit }) {
+  //Extraemos el usuario activo (se nombre currentUser para evitar conflictos)
+  const { user: currentUser } = useAuth();
   // --------------------------------------------------------
   // ESTADOS DEL DRAWER
   // --------------------------------------------------------
@@ -229,12 +232,15 @@ export default function DetailDrawer({ isOpen, onClose, producto, onOpenReport, 
 
         {/* Footer Actions */}
         <div className="p-4 border-t border-border bg-app flex flex-col gap-2">
-          <div className="grid grid-cols-3 gap-2">
-            <button
+          <div className={`grid gap-2 ${currentUser?.rol === 'ADMIN'? 'grid-cols-3': 'grid-cols-2'}`}>
+            {/*Solo se muestra si es ADMIN*/}
+            {currentUser?.rol === 'ADMIN'&&(
+              <button
               onClick={() => onOpenEdit(producto)} 
               className="bg-inputBg border border-border text-text-primary hover:border-accent rounded-lg font-heading font-semibold text-[0.75rem] py-2 transition-colors">
               Ajuste manual
             </button>
+            )}
             <button className="bg-inputBg border border-border text-text-primary hover:border-accent rounded-lg font-heading font-semibold text-[0.75rem] py-2 transition-colors">Emergencia</button>
             <button className="bg-accent text-white hover:opacity-90 rounded-lg font-heading font-semibold text-[0.75rem] py-2 transition-colors">Abastecer</button>
           </div>
