@@ -23,7 +23,7 @@ const timeAgo = (dateString) => {
 };
 
 export default function UserDrawer({ isOpen, onClose, usuario, onOpenReport, onOpenEdit }) {
-  // 🚀 2. Extraemos el usuario activo (lo renombramos a currentUser para evitar conflictos)
+  //  2. Extraemos el usuario activo (lo renombramos a currentUser para evitar conflictos)
   const { user: currentUser } = useAuth(); 
 
   // --------------------------------------------------------

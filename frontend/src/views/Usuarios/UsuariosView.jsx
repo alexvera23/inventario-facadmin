@@ -5,6 +5,7 @@ import { toastService } from '../../services/toastService';
 import api from '../../services/api';
 import UsuarioModal from '../../components/Modals/UsuarioModal';
 import EditUsuarioModal from '../../components/Modals/EditUsuarioModal';
+import { useAuth } from '../../context/AuthContext';
 
 export default function UsuariosView() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -13,6 +14,7 @@ export default function UsuariosView() {
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isUserModalOpen, setIsUserModalOpen]= useState(false);
   const [isEditUsuarioModal, setIsEditModalOpen] = useState(false);
+  const {user: currentUser} = useAuth();
 
   // --------------------------------------------------------
   // ESTADOS PARA DATOS REALES DE LA API
@@ -116,11 +118,14 @@ export default function UsuariosView() {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="bg-inputBg border-[1.5px] border-border rounded-lg py-2 px-4 text-sm text-text-primary outline-none flex-1 sm:w-56 focus:border-accent transition-all"
           />
-          <button onClick={() => setIsUserModalOpen(true)}
-            className="flex items-center justify-center gap-2 px-4 rounded-lg bg-text-primary text-app font-heading font-bold text-sm transition-opacity hover:opacity-85 whitespace-nowrap dark:bg-accent dark:text-[#002D4C]">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
-            <span className="hidden sm:inline">Nuevo Usuario</span>
-          </button>
+          {/*Solo se muestra si es ADMIN*/}
+          {currentUser?.rol === 'ADMIN' &&(
+            <button onClick={() => setIsUserModalOpen(true)}
+              className="flex items-center justify-center gap-2 px-4 rounded-lg bg-text-primary text-app font-heading font-bold text-sm transition-opacity hover:opacity-85 whitespace-nowrap dark:bg-accent dark:text-[#002D4C]">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
+              <span className="hidden sm:inline">Nuevo Usuario</span>
+            </button>
+          )}
         </div>
       </div>
 
