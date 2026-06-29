@@ -74,13 +74,12 @@ export default function LoginView() {
         <div className="absolute inset-x-0 top-0 h-1/3 login-scanline bg-gradient-to-b from-cyan-200/0 via-cyan-100/30 to-cyan-200/0 blur-md pointer-events-none" />
 
         {/*
-          FOTO INSTITUCIONAL: coloca tu imagen en alta calidad en
-          /public/assets/login-hero.jpg (o cambia el src por tu import).
+          FOTO INSTITUCIONAL:
           Si la imagen no carga, el onError la oculta y el panel se queda
           con el degradado de marca como respaldo, así nunca se ve roto.
         */}
         <img
-          src="/assets/login-hero.jpg"
+          src="../assets/hero.png"
           alt="Almacén de insumos FacAdmin BUAP"
           onError={(e) => { e.currentTarget.style.display = 'none'; }}
           className="absolute inset-0 w-full h-full object-cover mix-blend-overlay opacity-60 pointer-events-none"
