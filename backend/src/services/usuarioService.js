@@ -1,5 +1,6 @@
 const prisma = require('../config/db');
 const bcrypt = require('bcryptjs');
+const auditoriaService = require('./auditoriaService');
 
 class UsuarioService {
     // 1. GET LIGERO: Lista de usuarios + Conteo del mes actual (Para la tabla)
@@ -143,11 +144,30 @@ class UsuarioService {
     }
 
     // DELETE: Eliminar usuario
-    async eliminar(id) {
+    async eliminar(id, usuarioOperadorId) {
         try {
-            return await prisma.usuario.delete({
+            //obtener datos antes de borarrlo para guardar para la auditoria
+            const usuarioABorrar = await prisma.usuario.findUnique({
                 where: { id: parseInt(id) }
             });
+            if(!usuarioABorrar){
+                throw new Error('NOT_FOUND');
+            }
+            //eliminar en la base de datos 
+            const usuarioEliminado = await prisma.usuario.delete({
+                where: { id:parseInt(id) }
+            });
+
+            //Registro en la bitacora de auditoria 
+            await auditoriaService.registrar(
+                usuarioOperadorId,        // Quién lo hizo (ID del Admin firmado)
+                'ELIMINAR',               // Acción
+                'USUARIO',                // Entidad afectada
+                parseInt(id),             // ID de la entidad
+                `Se eliminó permanentemente al usuario: ${usuarioABorrar.nombre} (Matrícula: ${usuarioABorrar.id_interno}, Rol: ${usuarioABorrar.rol})` // Detalles libres
+            );
+            return usuarioEliminado;
+            
         } catch (error) {
             // Prisma error P2003: Llave foránea restrictiva (Aplica para encargados)
             if (error.code === 'P2003') {

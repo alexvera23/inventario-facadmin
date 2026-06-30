@@ -74,7 +74,8 @@ class UsuarioController {
     async eliminarUsuario(req, res) {
         try {
             const { id } = req.params;
-            await usuarioService.eliminar(id);
+            const usuarioOperadorId = req.user.id;
+            await usuarioService.eliminar(id,usuarioOperadorId);
             return res.status(200).json({ message: 'Usuario eliminado correctamente del sistema.' });
         } catch (error) {
             console.error('Error al eliminar usuario:', error);
