@@ -59,7 +59,8 @@ class UsuarioController {
     async actualizarUsuario(req, res) {
         try {
             const { id } = req.params;
-            const usuarioActualizado = await usuarioService.actualizar(id, req.body);
+            const usuarioOperadorId = req.user.id;
+            const usuarioActualizado = await usuarioService.actualizar(id, req.body,usuarioOperadorId);
             return res.status(200).json(usuarioActualizado);
         } catch (error) {
             console.error('Error al actualizar usuario:', error);

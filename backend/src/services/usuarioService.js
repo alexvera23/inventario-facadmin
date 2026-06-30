@@ -118,7 +118,14 @@ class UsuarioService {
     }
 
     // PUT: Actualizar información del usuario
-    async actualizar(id, datos) {
+    async actualizar(id, datos,usuarioOperadorId) {
+        //obtenemos los datos antes de editarlos 
+        const usuarioAEditar = await prisma.usuario.findUnique({
+            where: { id: parseInt(id)}
+        });
+        if (!usuarioAEditar){
+            throw new Error('NOT_FOUND');
+        }
         // 1. Armamos el objeto de datos básicos a actualizar
         const dataToUpdate = {
             id_interno: datos.id_interno, // Por si corrigen la matrícula
@@ -137,10 +144,19 @@ class UsuarioService {
         }
 
         // 3. Ejecutamos el update en Prisma
-        return await prisma.usuario.update({
+        const usuarioEditado = await prisma.usuario.update({
             where: { id: parseInt(id) },
             data: dataToUpdate
         });
+        //Registro en la bitacora de auditoria 
+        await auditoriaService.registrar(
+            usuarioOperadorId,
+            'EDITAR',
+            'USUARIO',
+            parseInt(id),
+            `Se editó  al usuario: ${usuarioAEditar.nombre} (Matrícula: ${usuarioAEditar.id_interno}, Rol: ${usuarioAEditar.rol})` 
+        );
+        return usuarioEditado;
     }
 
     // DELETE: Eliminar usuario
