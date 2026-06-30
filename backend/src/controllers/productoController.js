@@ -76,7 +76,8 @@ class ProductoController {
     async eliminarProducto(req, res) {
         try {
             const { id } = req.params;
-            await productoService.eliminar(id);
+            const usuarioOperadorId = req.user.id
+            await productoService.eliminar(id,usuarioOperadorId);
             return res.status(200).json({ message: 'Insumo eliminado correctamente.' });
         } catch (error) {
             console.error('Error al eliminar producto:', error);

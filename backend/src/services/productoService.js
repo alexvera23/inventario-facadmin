@@ -1,4 +1,5 @@
 const prisma = require('../config/db');
+const auditoriaService = require('./auditoriaService');
 
 class ProductoService {
     // Obtener todos los productos con sus opciones de embalaje a granel
@@ -68,11 +69,26 @@ class ProductoService {
     }
 
     // Eliminar un insumo (Solo si no tiene movimientos asociados)
-    async eliminar(id) {
+    async eliminar(id, usuarioOperadorId) {
         try {
-            return await prisma.producto.delete({
+            //obtener los datos del producto antes de borrarlo 
+            const productoABorrar = await prisma.producto.findUnique({
+                where: {id: parseInt(id)}
+            });
+            if(!productoABorrar){
+                throw new Error('NOT_FOUND');
+            }
+            const productoEliminado = await prisma.producto.delete({
                 where: { id: parseInt(id) }
             });
+            await auditoriaService.registrar(
+                usuarioOperadorId,
+                'ELIMINAR',               // Acción
+                'PRODUCTO',                // Entidad afectada
+                parseInt(id),             // ID de la entidad
+                `Se eliminó permanentemente al producto: ${productoABorrar.nombre} (ID: ${productoABorrar.id}, Categoria: ${productoABorrar.categoria})` // Detalles libres
+            );
+            return productoEliminado
         } catch (error) {
             // P2003 es el código de Prisma para "Fallo de restricción de llave foránea"
             if (error.code === 'P2003') {
