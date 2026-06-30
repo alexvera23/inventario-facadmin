@@ -77,7 +77,7 @@ model Movimiento {
   cantidad       Decimal        @db.Decimal(10, 2)
   solicitante_id Int?
   encargado_id   Int
-  fecha          DateTime       @default(now()) // 🚀 Corregido: Prisma v7 gestiona los tipos de fecha nativos de PG de forma automática
+  fecha          DateTime       @default(now()) //  Corregido: Prisma v7 gestiona los tipos de fecha nativos de PG de forma automática
   observaciones  String?        @db.Text
 
   producto       Producto       @relation(fields: [producto_id], references: [id], onDelete: Restrict)

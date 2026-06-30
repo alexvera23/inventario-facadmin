@@ -104,7 +104,7 @@ class UsuarioService {
                     correo: datos.correo,
                     departamento: datos.departamento,
                     rol: datos.rol || 'SOLICITANTE',
-                    password: passwordHash // 🚀 Se guarda null (Solicitantes) o el string encriptado
+                    password: passwordHash //  Se guarda null (Solicitantes) o el string encriptado
                 }
             });
         } catch (error) {
@@ -125,7 +125,7 @@ class UsuarioService {
             correo: datos.correo,
             departamento: datos.departamento,
             rol: datos.rol,
-            activo: datos.activo // 🚀 Añadimos el estado activo que configuramos en el frontend
+            activo: datos.activo //  Añadimos el estado activo que configuramos en el frontend
         };
 
         // 2. Si el frontend nos mandó una nueva contraseña (no venía vacía)
