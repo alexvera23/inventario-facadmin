@@ -63,7 +63,8 @@ class ProductoController {
     async actualizarProducto(req, res) {
         try {
             const { id } = req.params;
-            const productoActualizado = await productoService.actualizar(id, req.body);
+            const usuarioOperadorId = req.user.id;
+            const productoActualizado = await productoService.actualizar(id, req.body,usuarioOperadorId);
             return res.status(200).json(productoActualizado);
         } catch (error) {
             console.error('Error al actualizar producto:', error);

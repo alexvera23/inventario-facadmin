@@ -62,18 +62,31 @@ class ProductoService {
     }
 
     // Actualizar datos de un insumo existente
-    async actualizar(id, datos) {
-        return await prisma.producto.update({
+    async actualizar(id, datos, usuarioOperadorId) {
+        const productoAEditar = await prisma.producto.findUnique({
+            where: { id: parseInt(id)}
+        });
+        if(!productoAEditar){
+            throw new Error ('NOT_FOUND');
+        }
+        const productoEditado = await prisma.producto.update({
             where: { id: parseInt(id) },
             data: {
                 nombre: datos.nombre,
                 categoria: datos.categoria,
                 unidad_medida: datos.unidad_medida,
                 stock_minimo: datos.stock_minimo
-                // OJO: Normalmente el stock_actual no se actualiza por aquí, 
-                // sino a través de transacciones de inventario o ajustes manuales auditados.
             }
         });
+        await auditoriaService.registrar(
+            usuarioOperadorId,
+            'EDITAR',
+            'PRODUCTO',
+            parseInt(id),
+            `Se editó al producto: ${productoAEditar.nombre} (id: ${productoAEditar.id}, Categoria: ${productoAEditar.categoria})`
+        );
+        return productoEditado;
+        
     }
 
     // Eliminar un insumo (Solo si no tiene movimientos asociados)
