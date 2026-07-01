@@ -64,6 +64,7 @@ function AlertError({ mensaje, onRetry }) {
 
 // ─── Meses disponibles ──────────────────────────────────────────────────────
 const MESES = [
+  {value: '07-2026', label: 'Julio 2026'},
   { value: '06-2026', label: 'Junio 2026' },
   { value: '05-2026', label: 'Mayo 2026' },
   { value: '04-2026', label: 'Abril 2026' },
