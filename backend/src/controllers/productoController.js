@@ -1,4 +1,5 @@
 const productoService = require('../services/productoService');
+const usuarioService = require('../services/usuarioService');
 
 class ProductoController {
     // GET /api/productos
@@ -49,7 +50,8 @@ class ProductoController {
     // POST /api/productos
     async crearProducto(req, res) {
         try {
-            const nuevoProducto = await productoService.crear(req.body);
+            const usuarioOperadorId = req.user.id;
+            const nuevoProducto = await productoService.crear(req.body,usuarioOperadorId);
             return res.status(201).json(nuevoProducto);
         } catch (error) {
             console.error('Error al crear producto:', error);

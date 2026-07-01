@@ -88,7 +88,7 @@ class UsuarioService {
     }
 
     // POST: Crear usuario validando matrícula/ID único y encriptando contraseña
-    async crear(datos) {
+    async crear(datos, usuarioOperadorId) {
         try {
             // 1. Preparamos el hash de la contraseña si es que el front la envió
             let passwordHash = null;
@@ -98,16 +98,25 @@ class UsuarioService {
             }
 
             // 2. Guardamos en la base de datos
-            return await prisma.usuario.create({
-                data: {
+            const nuevoUsuario = await prisma.usuario.create({
+                data:{
                     id_interno: datos.id_interno,
                     nombre: datos.nombre,
                     correo: datos.correo,
                     departamento: datos.departamento,
                     rol: datos.rol || 'SOLICITANTE',
-                    password: passwordHash //  Se guarda null (Solicitantes) o el string encriptado
+                    password: passwordHash
                 }
             });
+            await auditoriaService.registrar(
+                usuarioOperadorId,
+                'CREAR',
+                'USUARIO',
+                nuevoUsuario.id,
+                `Se dio de alta al usuario: ${nuevoUsuario.nombre} (Matrícula/ID: ${nuevoUsuario.id_interno}, Rol: ${nuevoUsuario.rol})`
+            );
+            return nuevoUsuario;
+            
         } catch (error) {
             // Prisma error P2002: Falla de restricción de campo único (Unique constraint)
             if (error.code === 'P2002') {

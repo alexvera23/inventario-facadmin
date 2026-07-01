@@ -41,9 +41,9 @@ class ProductoService {
 
     //CRUD de Productos 
     // Crear un nuevo insumo básico
-    async crear(datos) {
-        return await prisma.producto.create({
-            data: {
+    async crear(datos,usuarioOperadorId) {
+        const nuevoProducto = await prisma.producto.create({
+             data: {
                 nombre: datos.nombre,
                 categoria: datos.categoria,
                 unidad_medida: datos.unidad_medida,
@@ -51,6 +51,14 @@ class ProductoService {
                 stock_minimo: datos.stock_minimo || 5
             }
         });
+        await auditoriaService.registrar(
+            usuarioOperadorId,
+            'CREAR',
+            'PRODUCTO',
+            nuevoProducto.id,
+            `Se dio de alta al producto: ${nuevoProducto.nombre} (Categoria: ${nuevoProducto.categoria})`
+        );
+        return nuevoProducto;
     }
 
     // Actualizar datos de un insumo existente

@@ -37,13 +37,14 @@ class UsuarioController {
     async crearUsuario(req, res) {
         try {
             const { id_interno, nombre, departamento, rol } = req.body;
+            const usuarioOperadorId = req.user.id;
 
             // Validaciones básicas
             if (!id_interno || !nombre || !departamento) {
                 return res.status(400).json({ message: 'Los campos id_interno, nombre y departamento son obligatorios.' });
             }
 
-            const nuevoUsuario = await usuarioService.crear(req.body);
+            const nuevoUsuario = await usuarioService.crear(req.body,usuarioOperadorId);
             return res.status(201).json(nuevoUsuario);
             
         } catch (error) {
