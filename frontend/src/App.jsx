@@ -10,7 +10,7 @@ import api from './services/api';
 import LoginView from './views/Login/LoginView';
 import { useAuth } from './context/AuthContext';
 import AuditoriasView from './views/Auditoria/AuditoriasView';
-
+import TransaccionesView from './views/Transacciones/TransaccionesView';
 function App() {
   const [activeView, setActiveView] = useState('catalogo');
   const [isMobileOpen, setMobileOpen] = useState(false);
@@ -39,6 +39,7 @@ function App() {
       case 'usuarios': return <UsuariosView/>;
       case 'reportes': return <ReportesView/>;
       case 'auditorias': return <AuditoriasView/>;
+      case 'transacciones': return <TransaccionesView/>;
       default: return <CatalogoView />;
     }
   };
