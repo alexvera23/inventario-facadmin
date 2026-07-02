@@ -62,12 +62,33 @@ const horizontalBarOpts = {
 };
 
 // ─── Meses disponibles ─────────────────────────────────────────────────────
-const MESES = [
-  { value: '06-2026', label: 'Junio 2026' },
-  { value: '05-2026', label: 'Mayo 2026' },
-  { value: '04-2026', label: 'Abril 2026' },
-  { value: '03-2026', label: 'Marzo 2026' },
+const nombresMeses = [
+  'Enero',
+  'Febrero',
+  'Marzo',
+  'Abril',
+  'Mayo',
+  'Junio',
+  'Julio',
+  'Agosto',
+  'Septiembre',
+  'Octubre',
+  'Noviembre',
+  'Diciembre'
 ];
+
+const MESES = Array.from({ length: 4 }, (_, i) => {
+  const fecha = new Date();
+  fecha.setMonth(fecha.getMonth() - i);
+
+  const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+  const anio = fecha.getFullYear();
+
+  return {
+    value: `${mes}-${anio}`,
+    label: `${nombresMeses[fecha.getMonth()]} ${anio}`,
+  };
+});
 
 // ─── Pequeño ícono de loading ──────────────────────────────────────────────
 function Spinner({ className = 'w-4 h-4' }) {
@@ -691,7 +712,7 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
   // ── Configuración del reporte ──────────────────────────────────────────
   const [scope,    setScope]    = useState(initialScope);
   const [subjectId, setSubjectId] = useState(initialSubjectId);
-  const [mesSeleccionado, setMesSeleccionado] = useState('06-2026');
+  const [mesSeleccionado, setMesSeleccionado] = useState(MESES[0].value);
   const [periodo, setPeriodo]   = useState('semana');
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin,    setFechaFin]    = useState('');
