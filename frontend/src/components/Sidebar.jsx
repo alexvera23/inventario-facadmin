@@ -15,10 +15,11 @@ export default function Sidebar({ activeView, setActiveView, isMobileOpen, setMo
   ];
 
   //  FILTRO DE SEGURIDAD: Ocultar pestaña 'usuarios' si no es ADMIN ESTA POR VERSE SI SI SE APLICA, EN CASO DE QUE SI PONER usuarios entre las comillas 
-  const visibleNavItems = navItems.filter(item => {
-    if (item.id === 'auditorias' && user?.rol !== 'ADMIN') return false;
-    return true;
-  });
+  const adminOnlyItems = ['auditorias', 'transacciones'];
+
+  const visibleNavItems = navItems.filter(
+    item => !adminOnlyItems.includes(item.id) || user?.rol === 'ADMIN'
+  );
 
   // Función para obtener iniciales (Ej: Alejandro Cholula -> AC)
   const getInitials = (name) => {
