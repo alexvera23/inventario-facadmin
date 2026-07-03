@@ -7,6 +7,7 @@ import UsuarioModal from '../../components/Modals/UsuarioModal';
 import EditUsuarioModal from '../../components/Modals/EditUsuarioModal';
 import { useAuth } from '../../context/AuthContext';
 
+
 export default function UsuariosView() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
@@ -57,9 +58,7 @@ export default function UsuariosView() {
     } catch (err) {
       console.error('Error al traer los usuarios:', err);
       setError('No se pudo cargar la lista de usuarios. Verifica la conexión con la base de datos.');
-      if (toastService && toastService.error) {
-        toastService.error('Error de conexión al obtener usuarios');
-      }
+      toastService.error('ERROR EN EL SERVIDOR');
     } finally {
       setLoading(false);
     }

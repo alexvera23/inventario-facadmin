@@ -4,6 +4,7 @@ import ReportModal from './ReportModal';
 import api from '../../services/api';
 import InsumoModal from '../../components/Modals/InsumoModal';
 import EditInsumoModal from '../../components/Modals/EditInsumoModal';
+import { toastService } from '../../services/toastService';
 
 export default function CatalogoView() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -14,6 +15,7 @@ export default function CatalogoView() {
   // Estados para la conexión con el Backend
   const [insumos, setInsumos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [isInsumoModalOpen, setIsInsumoModalOpen]= useState(false);
   const [isEditInsumoModalOpen, setIsEditModalOpen] = useState(false);
 
@@ -49,7 +51,8 @@ export default function CatalogoView() {
 
       setInsumos(productosSeguros);
     } catch (error) {
-      console.error('Error al conectar con la BD:', error);
+      setError('No se pudo cargar la lista de productos. Verifica la conexión con la base de datos.');
+      toastService.error('ERROR EN EL SERVIDOR');
     } finally {
       setLoading(false);
     }
@@ -116,10 +119,21 @@ export default function CatalogoView() {
         </div>
       </div>
 
-      {/* Renderizado condicional de carga / Tabla */}
+      {/* Renderizado condicional de carga / error / Tabla */}
       {loading ? (
         <div className="flex-1 flex justify-center items-center">
-           <div className="w-10 h-10 border-4 border-accent border-t-transparent rounded-full animate-spin"></div>
+          <div className="w-10 h-10 border-4 border-accent border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      ) : error ? (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-8 text-center flex-1 flex flex-col items-center justify-center shadow-sm">
+          <span className="text-3xl mb-3">⚠️</span>
+          <p className="text-red-500 font-bold mb-2">{error}</p>
+          <button
+            onClick={fetchProductos}
+            className="px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-semibold hover:bg-red-600 transition-colors"
+          >
+            Reintentar Conexión
+          </button>
         </div>
       ) : (
         <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden flex-1 flex flex-col">
@@ -136,28 +150,50 @@ export default function CatalogoView() {
               </thead>
               <tbody className="divide-y divide-border">
                 {insumosFiltrados.map((item) => (
-                  <tr 
-                    key={item.id} 
+                  <tr
+                    key={item.id}
                     onClick={() => handleRowClick(item)}
                     className="hover:bg-tableHover cursor-pointer transition-colors group"
                   >
-                    <td className="p-4 text-sm font-mono text-text-muted group-hover:text-text-primary">#{item.id}</td>
-                    <td className="p-4 font-semibold text-text-primary">{item.nombre}</td>
-                    <td className="p-4 text-sm text-text-secondary hidden sm:table-cell">{item.categoria}</td>
+                    <td className="p-4 text-sm font-mono text-text-muted group-hover:text-text-primary">
+                      #{item.id}
+                    </td>
+                    <td className="p-4 font-semibold text-text-primary">
+                      {item.nombre}
+                    </td>
+                    <td className="p-4 text-sm text-text-secondary hidden sm:table-cell">
+                      {item.categoria}
+                    </td>
                     <td className="p-4 text-right">
-                      <span className="font-heading font-bold text-accent text-base">{item.stock.toFixed(2)}</span>
-                      <span className="text-xs text-text-muted ml-1">{item.unidad}</span>
+                      <span className="font-heading font-bold text-accent text-base">
+                        {item.stock.toFixed(2)}
+                      </span>
+                      <span className="text-xs text-text-muted ml-1">
+                        {item.unidad}
+                      </span>
                     </td>
                     <td className="p-4 text-center">
-                      {item.estado === 'ok' && <span className="bg-green-500/10 text-green-600 font-heading text-[0.7rem] font-bold px-3 py-1 rounded-full">NORMAL</span>}
-                      {item.estado === 'mid' && <span className="bg-yellow-500/10 text-yellow-600 font-heading text-[0.7rem] font-bold px-3 py-1 rounded-full">MODERADO</span>}
-                      {item.estado === 'low' && <span className="bg-red-500/10 text-red-500 font-heading text-[0.7rem] font-bold px-3 py-1 rounded-full">CRÍTICO</span>}
+                      {item.estado === "ok" && (
+                        <span className="bg-green-500/10 text-green-600 font-heading text-[0.7rem] font-bold px-3 py-1 rounded-full">
+                          NORMAL
+                        </span>
+                      )}
+                      {item.estado === "mid" && (
+                        <span className="bg-yellow-500/10 text-yellow-600 font-heading text-[0.7rem] font-bold px-3 py-1 rounded-full">
+                          MODERADO
+                        </span>
+                      )}
+                      {item.estado === "low" && (
+                        <span className="bg-red-500/10 text-red-500 font-heading text-[0.7rem] font-bold px-3 py-1 rounded-full">
+                          CRÍTICO
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            
+
             {insumosFiltrados.length === 0 && (
               <div className="p-8 text-center text-text-muted">
                 No se encontraron insumos que coincidan con la búsqueda.
