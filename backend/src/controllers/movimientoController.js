@@ -73,6 +73,43 @@ class MovimientoController {
             return res.status(500).json({ message: 'Error al recuperar el historial.' });
         }
     }
+
+    async actualizarMovimientos(req, res){
+            try {
+            const { id } = req.params;
+            const { cantidad, observaciones, solicitante_id } = req.body;
+            
+            //  Extraemos el ID del Admin desde el Token que pasó por el middleware
+            const adminId = req.user.id; 
+
+            if (cantidad === undefined || cantidad === null) {
+                return res.status(400).json({ message: 'La nueva cantidad es obligatoria.' });
+            }
+
+            const resultado = await movimientoService.actualizarTransaccion(
+                id, 
+                cantidad, 
+                observaciones, 
+                solicitante_id, 
+                adminId
+            );
+
+            return res.status(200).json({
+                message: 'Transacción modificada y stock recalculado con éxito.',
+                data: resultado
+            });
+
+        } catch (error) {
+            if (error.message === 'NOT_FOUND') {
+                return res.status(404).json({ message: 'La transacción original no existe.' });
+            }
+            if (error.message === 'STOCK_INSUFICIENTE') {
+                return res.status(400).json({ message: 'El ajuste dejaría el stock en números negativos. Verifica la cantidad.' });
+            }
+            console.error('[MovimientoController Error]:', error);
+            return res.status(500).json({ message: 'Error interno al actualizar la transacción.' });
+        }
+    }
 }
 
 module.exports = new MovimientoController();

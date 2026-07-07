@@ -1,23 +1,11 @@
-import toast from 'react-hot-toast';
+import { toast } from '../components/ToastProvider';
 
 export const toastService = {
-  success(message) {
-    toast.success(message);
-  },
-
-  error(message) {
-    toast.error(message);
-  },
-
-  info(message) {
-    toast(message);
-  },
-
-  loading(message) {
-    return toast.loading(message);
-  },
-
-  dismiss(id) {
-    toast.dismiss(id);
-  },
+  success: toast.success,
+  error: toast.error,
+  warning: toast.warning,
+  info: toast.info,
+  loading: toast.loading,
+  dismiss: toast.dismiss,
+  promise: toast.promise,
 };

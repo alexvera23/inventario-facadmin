@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTheme } from '../context/ThemeContext';
-import { useAuth } from '../context/AuthContext'; // 🚀 IMPORTAMOS EL CONTEXTO
+import { useAuth } from '../context/AuthContext'; //  IMPORTAMOS EL CONTEXTO
 
 export default function Navbar({ setMobileOpen }) {
   const { theme, toggleTheme } = useTheme();

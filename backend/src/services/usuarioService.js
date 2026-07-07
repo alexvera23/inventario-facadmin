@@ -1,5 +1,6 @@
 const prisma = require('../config/db');
 const bcrypt = require('bcryptjs');
+const auditoriaService = require('./auditoriaService');
 
 class UsuarioService {
     // 1. GET LIGERO: Lista de usuarios + Conteo del mes actual (Para la tabla)
@@ -87,7 +88,7 @@ class UsuarioService {
     }
 
     // POST: Crear usuario validando matrícula/ID único y encriptando contraseña
-    async crear(datos) {
+    async crear(datos, usuarioOperadorId) {
         try {
             // 1. Preparamos el hash de la contraseña si es que el front la envió
             let passwordHash = null;
@@ -97,16 +98,25 @@ class UsuarioService {
             }
 
             // 2. Guardamos en la base de datos
-            return await prisma.usuario.create({
-                data: {
+            const nuevoUsuario = await prisma.usuario.create({
+                data:{
                     id_interno: datos.id_interno,
                     nombre: datos.nombre,
                     correo: datos.correo,
                     departamento: datos.departamento,
                     rol: datos.rol || 'SOLICITANTE',
-                    password: passwordHash //  Se guarda null (Solicitantes) o el string encriptado
+                    password: passwordHash
                 }
             });
+            await auditoriaService.registrar(
+                usuarioOperadorId,
+                'CREAR',
+                'USUARIO',
+                nuevoUsuario.id,
+                `Se dio de alta al usuario: ${nuevoUsuario.nombre} (Matrícula/ID: ${nuevoUsuario.id_interno}, Rol: ${nuevoUsuario.rol})`
+            );
+            return nuevoUsuario;
+            
         } catch (error) {
             // Prisma error P2002: Falla de restricción de campo único (Unique constraint)
             if (error.code === 'P2002') {
@@ -117,7 +127,14 @@ class UsuarioService {
     }
 
     // PUT: Actualizar información del usuario
-    async actualizar(id, datos) {
+    async actualizar(id, datos,usuarioOperadorId) {
+        //obtenemos los datos antes de editarlos 
+        const usuarioAEditar = await prisma.usuario.findUnique({
+            where: { id: parseInt(id)}
+        });
+        if (!usuarioAEditar){
+            throw new Error('NOT_FOUND');
+        }
         // 1. Armamos el objeto de datos básicos a actualizar
         const dataToUpdate = {
             id_interno: datos.id_interno, // Por si corrigen la matrícula
@@ -136,18 +153,46 @@ class UsuarioService {
         }
 
         // 3. Ejecutamos el update en Prisma
-        return await prisma.usuario.update({
+        const usuarioEditado = await prisma.usuario.update({
             where: { id: parseInt(id) },
             data: dataToUpdate
         });
+        //Registro en la bitacora de auditoria 
+        await auditoriaService.registrar(
+            usuarioOperadorId,
+            'EDITAR',
+            'USUARIO',
+            parseInt(id),
+            `Se editó  al usuario: ${usuarioAEditar.nombre} (Matrícula: ${usuarioAEditar.id_interno}, Rol: ${usuarioAEditar.rol})` 
+        );
+        return usuarioEditado;
     }
 
     // DELETE: Eliminar usuario
-    async eliminar(id) {
+    async eliminar(id, usuarioOperadorId) {
         try {
-            return await prisma.usuario.delete({
+            //obtener datos antes de borarrlo para guardar para la auditoria
+            const usuarioABorrar = await prisma.usuario.findUnique({
                 where: { id: parseInt(id) }
             });
+            if(!usuarioABorrar){
+                throw new Error('NOT_FOUND');
+            }
+            //eliminar en la base de datos 
+            const usuarioEliminado = await prisma.usuario.delete({
+                where: { id:parseInt(id) }
+            });
+
+            //Registro en la bitacora de auditoria 
+            await auditoriaService.registrar(
+                usuarioOperadorId,        // Quién lo hizo (ID del Admin firmado)
+                'ELIMINAR',               // Acción
+                'USUARIO',                // Entidad afectada
+                parseInt(id),             // ID de la entidad
+                `Se eliminó permanentemente al usuario: ${usuarioABorrar.nombre} (Matrícula: ${usuarioABorrar.id_interno}, Rol: ${usuarioABorrar.rol})` // Detalles libres
+            );
+            return usuarioEliminado;
+            
         } catch (error) {
             // Prisma error P2003: Llave foránea restrictiva (Aplica para encargados)
             if (error.code === 'P2003') {

@@ -1,4 +1,5 @@
 const prisma = require('../config/db');
+const auditoriaService = require('./auditoriaService');
 
 class ProductoService {
     // Obtener todos los productos con sus opciones de embalaje a granel
@@ -40,9 +41,9 @@ class ProductoService {
 
     //CRUD de Productos 
     // Crear un nuevo insumo básico
-    async crear(datos) {
-        return await prisma.producto.create({
-            data: {
+    async crear(datos,usuarioOperadorId) {
+        const nuevoProducto = await prisma.producto.create({
+             data: {
                 nombre: datos.nombre,
                 categoria: datos.categoria,
                 unidad_medida: datos.unidad_medida,
@@ -50,29 +51,65 @@ class ProductoService {
                 stock_minimo: datos.stock_minimo || 5
             }
         });
+        await auditoriaService.registrar(
+            usuarioOperadorId,
+            'CREAR',
+            'PRODUCTO',
+            nuevoProducto.id,
+            `Se dio de alta al producto: ${nuevoProducto.nombre} (Categoria: ${nuevoProducto.categoria})`
+        );
+        return nuevoProducto;
     }
 
     // Actualizar datos de un insumo existente
-    async actualizar(id, datos) {
-        return await prisma.producto.update({
+    async actualizar(id, datos, usuarioOperadorId) {
+        const productoAEditar = await prisma.producto.findUnique({
+            where: { id: parseInt(id)}
+        });
+        if(!productoAEditar){
+            throw new Error ('NOT_FOUND');
+        }
+        const productoEditado = await prisma.producto.update({
             where: { id: parseInt(id) },
             data: {
                 nombre: datos.nombre,
                 categoria: datos.categoria,
                 unidad_medida: datos.unidad_medida,
                 stock_minimo: datos.stock_minimo
-                // OJO: Normalmente el stock_actual no se actualiza por aquí, 
-                // sino a través de transacciones de inventario o ajustes manuales auditados.
             }
         });
+        await auditoriaService.registrar(
+            usuarioOperadorId,
+            'EDITAR',
+            'PRODUCTO',
+            parseInt(id),
+            `Se editó al producto: ${productoAEditar.nombre} (id: ${productoAEditar.id}, Categoria: ${productoAEditar.categoria})`
+        );
+        return productoEditado;
+        
     }
 
     // Eliminar un insumo (Solo si no tiene movimientos asociados)
-    async eliminar(id) {
+    async eliminar(id, usuarioOperadorId) {
         try {
-            return await prisma.producto.delete({
+            //obtener los datos del producto antes de borrarlo 
+            const productoABorrar = await prisma.producto.findUnique({
+                where: {id: parseInt(id)}
+            });
+            if(!productoABorrar){
+                throw new Error('NOT_FOUND');
+            }
+            const productoEliminado = await prisma.producto.delete({
                 where: { id: parseInt(id) }
             });
+            await auditoriaService.registrar(
+                usuarioOperadorId,
+                'ELIMINAR',               // Acción
+                'PRODUCTO',                // Entidad afectada
+                parseInt(id),             // ID de la entidad
+                `Se eliminó permanentemente al producto: ${productoABorrar.nombre} (ID: ${productoABorrar.id}, Categoria: ${productoABorrar.categoria})` // Detalles libres
+            );
+            return productoEliminado
         } catch (error) {
             // P2003 es el código de Prisma para "Fallo de restricción de llave foránea"
             if (error.code === 'P2003') {

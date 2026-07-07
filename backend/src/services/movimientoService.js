@@ -1,5 +1,6 @@
 const prisma = require('../config/db');
 const { Prisma } = require('@prisma/client');
+const auditoriaService = require('./auditoriaService');
 
 class MovimientoService {
    async registrarMovimientoMasivo({ tipo, solicitanteId, encargadoId, observaciones, items }) {
@@ -100,6 +101,73 @@ class MovimientoService {
             orderBy: {
                 fecha: 'desc'
             }
+        });
+    }
+    //Editar Transaccion con Compensación 
+    async actualizarTransaccion(id, nuevaCantidad, observaciones, solicitanteId, adminId) {
+        // Ejecutamos todo dentro de una transacción interactiva de Prisma
+        return await prisma.$transaction(async (tx) => {
+            
+            // 1. Obtener la transacción original
+            const movViejo = await tx.movimiento.findUnique({
+                where: { id: parseInt(id) },
+                include: { producto: true }
+            });
+
+            if (!movViejo) throw new Error('NOT_FOUND');
+
+            // 2. Calcular la diferencia matemática
+            // Parseamos a Float porque Decimal en Prisma viene como objeto
+            const cantidadVieja = parseFloat(movViejo.cantidad);
+            const cantidadNueva = parseFloat(nuevaCantidad);
+            
+            const diferencia = cantidadNueva - cantidadVieja;
+            
+            // Si es SALIDA, el ajuste en stock es inverso (si resto menos, el stock sube)
+            let ajusteStock = movViejo.tipo === 'ENTRADA' ? diferencia : -diferencia;
+
+            // 3. Validar que el ajuste no deje el stock en negativo
+            const nuevoStock = parseFloat(movViejo.producto.stock_actual) + ajusteStock;
+            if (nuevoStock < 0) {
+                throw new Error('STOCK_INSUFICIENTE');
+            }
+
+            // 4. Actualizar el registro del movimiento
+            const movActualizado = await tx.movimiento.update({
+                where: { id: movViejo.id },
+                data: {
+                    cantidad: cantidadNueva,
+                    observaciones: observaciones !== undefined ? observaciones : movViejo.observaciones,
+                    solicitante_id: solicitanteId !== undefined ? solicitanteId : movViejo.solicitante_id
+                }
+            });
+
+            // 5. Actualizar el stock del producto
+            if (ajusteStock !== 0) {
+                await tx.producto.update({
+                    where: { id: movViejo.producto_id },
+                    data: {
+                        stock_actual: {
+                            increment: ajusteStock // Prisma se encarga de la suma o resta segura
+                        }
+                    }
+                });
+            }
+
+            // 6.  Registrar en la BITÁCORA DE AUDITORÍA
+            // Usamos el auditoriaService inyectando nuestro objeto 'tx' si fuera posible, 
+            // pero para simplificar, lo registramos directo en la misma transacción:
+            await tx.auditoria.create({
+                data: {
+                    usuario_id: adminId,
+                    accion: 'ACTUALIZAR',
+                    entidad: 'MOVIMIENTO',
+                    entidad_id: movViejo.id,
+                    detalles: `Modificó transacción #${movViejo.id} (${movViejo.tipo} de ${movViejo.producto.nombre}). Cantidad: ${cantidadVieja} -> ${cantidadNueva}. Ajuste en stock: ${ajusteStock > 0 ? '+'+ajusteStock : ajusteStock}.`
+                }
+            });
+
+            return movActualizado;
         });
     }
 }

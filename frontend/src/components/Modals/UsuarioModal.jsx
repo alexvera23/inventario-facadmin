@@ -9,7 +9,7 @@ export default function UsuarioModal({ isOpen, onClose, onSuccess }) {
     correo: '',
     departamento: 'Sistemas',
     rol: 'SOLICITANTE',
-    password: '' // 🚀 Inicializamos el campo de contraseña
+    password: '' //  Inicializamos el campo de contraseña
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -25,7 +25,7 @@ export default function UsuarioModal({ isOpen, onClose, onSuccess }) {
     setIsSubmitting(true);
 
     try {
-      // 🚀 BLINDAJE: Si el rol es SOLICITANTE, nos aseguramos de no enviar contraseña
+      //  BLINDAJE: Si el rol es SOLICITANTE, nos aseguramos de no enviar contraseña
       const payload = { ...formData };
       if (payload.rol === 'SOLICITANTE') {
         delete payload.password;
@@ -128,7 +128,7 @@ export default function UsuarioModal({ isOpen, onClose, onSuccess }) {
             />
           </div>
 
-          {/* 🚀 BLINDAJE: Renderizado condicional de la contraseña */}
+          {/*  BLINDAJE: Renderizado condicional de la contraseña */}
           {(formData.rol === 'ADMIN' || formData.rol === 'ENCARGADO') && (
             <div>
               <label className="block text-[0.7rem] font-heading font-bold uppercase text-text-muted mb-1.5">Contraseña de Acceso *</label>

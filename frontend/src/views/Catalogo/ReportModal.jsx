@@ -6,6 +6,7 @@ import {
 } from 'chart.js';
 import { Line, Doughnut, Bar } from 'react-chartjs-2';
 import api from '../../services/api';
+import { toastService } from '../../services/toastService';
 
 ChartJS.register(
   CategoryScale, LinearScale, PointElement, LineElement,
@@ -62,12 +63,33 @@ const horizontalBarOpts = {
 };
 
 // ─── Meses disponibles ─────────────────────────────────────────────────────
-const MESES = [
-  { value: '06-2026', label: 'Junio 2026' },
-  { value: '05-2026', label: 'Mayo 2026' },
-  { value: '04-2026', label: 'Abril 2026' },
-  { value: '03-2026', label: 'Marzo 2026' },
+const nombresMeses = [
+  'Enero',
+  'Febrero',
+  'Marzo',
+  'Abril',
+  'Mayo',
+  'Junio',
+  'Julio',
+  'Agosto',
+  'Septiembre',
+  'Octubre',
+  'Noviembre',
+  'Diciembre'
 ];
+
+const MESES = Array.from({ length: 4 }, (_, i) => {
+  const fecha = new Date();
+  fecha.setMonth(fecha.getMonth() - i);
+
+  const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+  const anio = fecha.getFullYear();
+
+  return {
+    value: `${mes}-${anio}`,
+    label: `${nombresMeses[fecha.getMonth()]} ${anio}`,
+  };
+});
 
 // ─── Pequeño ícono de loading ──────────────────────────────────────────────
 function Spinner({ className = 'w-4 h-4' }) {
@@ -361,6 +383,7 @@ async function generarExcel({ scope, labelMes, kpis, data, labelScope }) {
 
   const filename = `reporte_facdamin_${scope}_${labelMes.replace(' ', '_')}.xlsx`;
   XLSX.writeFile(wb, filename);
+  toastService.success('Reporte Excel generado exitosamente');
 }
 
 /**
@@ -679,7 +702,7 @@ async function generarPDF({ scope, labelMes, kpis, data, labelScope, incluir,
     doc.text('FacAdmin — Benemérita Universidad Autónoma de Puebla', MARGIN, 293.5);
     doc.text(`Página ${p} de ${totalPages}`, W - MARGIN, 293.5, { align: 'right' });
   }
-
+  toastService.success('Reporte PDF generado exitosamente');
   const filename = `reporte_facdamin_${scope}_${labelMes.replace(' ', '_')}.pdf`;
   doc.save(filename);
 }
@@ -691,7 +714,7 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
   // ── Configuración del reporte ──────────────────────────────────────────
   const [scope,    setScope]    = useState(initialScope);
   const [subjectId, setSubjectId] = useState(initialSubjectId);
-  const [mesSeleccionado, setMesSeleccionado] = useState('06-2026');
+  const [mesSeleccionado, setMesSeleccionado] = useState(MESES[0].value);
   const [periodo, setPeriodo]   = useState('semana');
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin,    setFechaFin]    = useState('');
@@ -764,6 +787,7 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
       }
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Error al cargar los datos');
+      toastService.error('ERROR EN EL SERVIDOR');
     } finally {
       setCargando(false);
     }

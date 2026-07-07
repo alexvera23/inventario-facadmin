@@ -37,13 +37,14 @@ class UsuarioController {
     async crearUsuario(req, res) {
         try {
             const { id_interno, nombre, departamento, rol } = req.body;
+            const usuarioOperadorId = req.user.id;
 
             // Validaciones básicas
             if (!id_interno || !nombre || !departamento) {
                 return res.status(400).json({ message: 'Los campos id_interno, nombre y departamento son obligatorios.' });
             }
 
-            const nuevoUsuario = await usuarioService.crear(req.body);
+            const nuevoUsuario = await usuarioService.crear(req.body,usuarioOperadorId);
             return res.status(201).json(nuevoUsuario);
             
         } catch (error) {
@@ -59,7 +60,8 @@ class UsuarioController {
     async actualizarUsuario(req, res) {
         try {
             const { id } = req.params;
-            const usuarioActualizado = await usuarioService.actualizar(id, req.body);
+            const usuarioOperadorId = req.user.id;
+            const usuarioActualizado = await usuarioService.actualizar(id, req.body,usuarioOperadorId);
             return res.status(200).json(usuarioActualizado);
         } catch (error) {
             console.error('Error al actualizar usuario:', error);
@@ -74,7 +76,8 @@ class UsuarioController {
     async eliminarUsuario(req, res) {
         try {
             const { id } = req.params;
-            await usuarioService.eliminar(id);
+            const usuarioOperadorId = req.user.id;
+            await usuarioService.eliminar(id,usuarioOperadorId);
             return res.status(200).json({ message: 'Usuario eliminado correctamente del sistema.' });
         } catch (error) {
             console.error('Error al eliminar usuario:', error);
