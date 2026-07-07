@@ -48,11 +48,11 @@ model Producto {
   nombre        String       @db.VarChar(100)
   categoria     String       @db.VarChar(50)
   unidad_medida String       @db.VarChar(15)
-  stock_actual  Decimal      @default(0.00) @db.Decimal(10, 2)
-  stock_minimo  Decimal      @default(0.00) @db.Decimal(10, 2)
-  
+  existencias StockEdificio[]
   embalajes     Embalaje[]
   movimientos   Movimiento[]
+
+  historial_critico HistorialStockCritico[]
 
   @@map("productos")
 }
@@ -75,10 +75,12 @@ model Movimiento {
   producto_id    Int
   tipo           TipoMovimiento
   cantidad       Decimal        @db.Decimal(10, 2)
+  edificio       String         @db.VarChar(50)         
   solicitante_id Int?
   encargado_id   Int
   fecha          DateTime       @default(now()) //  Corregido: Prisma v7 gestiona los tipos de fecha nativos de PG de forma automática
   observaciones  String?        @db.Text
+
 
   producto       Producto       @relation(fields: [producto_id], references: [id], onDelete: Restrict)
   solicitante    Usuario?       @relation("SolicitanteRel", fields: [solicitante_id], references: [id], onDelete: SetNull)
@@ -100,4 +102,33 @@ model Auditoria {
   usuario          Usuario  @relation(fields: [usuario_id], references: [id], onDelete: Restrict)
 
   @@map("auditoria")
+}
+
+// 7. Control de inventario por edificio 
+
+model StockEdificio {
+  id           Int      @id @default(autoincrement())
+  producto_id  Int
+  edificio     String   @db.VarChar(50) // Ej: "ADM1", "ADM4"
+  stock_actual Decimal  @default(0.00) @db.Decimal(10, 2)
+  stock_minimo Decimal  @default(0.00) @db.Decimal(10, 2)
+
+  producto     Producto @relation(fields: [producto_id], references: [id], onDelete: Cascade)
+
+  @@unique([producto_id, edificio]) // Evita que un producto tenga dos registros para el mismo edificio
+  @@map("stock_edificio")  
+}
+
+//8. Registro Histórico de Desabasto 
+model HistorialStockCritico {
+  id          Int      @id @default(autoincrement())
+  producto_id Int
+  edificio    String   @db.VarChar(50)  //  Sabemos exactamente dónde ocurrió el desabasto
+  stock_visto Decimal  @db.Decimal(10, 2) // La cantidad exacta con la que cayó en crítico
+  stock_min   Decimal  @db.Decimal(10, 2) // El mínimo configurado en ese momento
+  fecha       DateTime @default(now())
+
+  producto    Producto @relation(fields: [producto_id], references: [id], onDelete: Cascade)
+
+  @@map("historial_stock_critico")
 }
