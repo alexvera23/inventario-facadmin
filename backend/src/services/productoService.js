@@ -47,7 +47,7 @@ class ProductoService {
             unidad_medida: datos.unidad_medida
         };
 
-        // 🚀 Si el front envía el edificio inicial, lo creamos en cascada
+        //  Si el front envía el edificio inicial, lo creamos en cascada
         if (datos.edificio) {
             dataProducto.existencias = {
                 create: {
