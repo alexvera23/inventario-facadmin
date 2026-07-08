@@ -4,7 +4,7 @@ class MovimientoController {
     // POST /api/movimientos
     async crearMovimiento(req, res) {
         try {
-            const { tipo, solicitanteId, encargadoId, observaciones, items } = req.body;
+            const { tipo, solicitanteId, encargadoId, observaciones, items, edificio } = req.body;
 
             // Validaciones estructurales
             if (!tipo || !encargadoId || !items) {
@@ -18,7 +18,8 @@ class MovimientoController {
                 solicitanteId,
                 encargadoId,
                 observaciones,
-                items
+                items,
+                edificio
             });
 
             return res.status(201).json({

@@ -1,17 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
-import { toastService } from '../../services/toastService';
+import { toastService } from '../../services/toastService'; // Ajusta la ruta de tu toast si es distinta
 import { useAuth } from '../../context/AuthContext';
+
+// Lista de edificios disponibles (puedes ajustar esto según los reales de tu facultad)
+const EDIFICIOS_DISPONIBLES = ['ADM1', 'ADM2', 'ADM3', 'ADM4', 'LAB_SISTEMAS', 'BODEGA_CENTRAL'];
 
 export default function VentanillaView() {
   // --------------------------------------------------------
   // ESTADOS PRINCIPALES
   // --------------------------------------------------------
   const [tipoMovimiento, setTipoMovimiento] = useState('SALIDA');
+  const [edificio, setEdificio] = useState('ADM1'); // 🚀 NUEVO: Estado del edificio
   const [solicitante, setSolicitante] = useState(null);
   const [bandeja, setBandeja] = useState([]);
   const [observaciones, setObservaciones] = useState('');
   const { user } = useAuth();
+  
   // --------------------------------------------------------
   // ESTADOS DE DATOS (API) Y BÚSQUEDA
   // --------------------------------------------------------
@@ -38,7 +43,7 @@ export default function VentanillaView() {
   const fetchInitialData = async () => {
     setLoadingData(true);
     try {
-      // Ejecutamos ambas peticiones en paralelo para mayor velocidad
+      // Ejecutamos ambas peticiones en paralelo
       const [resUsuarios, resProductos] = await Promise.all([
         api.get('/usuarios'),
         api.get('/productos')
@@ -59,7 +64,7 @@ export default function VentanillaView() {
   const filteredUsuarios = usuarios.filter(u => 
     u.nombre?.toLowerCase().includes(userSearch.toLowerCase()) || 
     u.id_interno?.toLowerCase().includes(userSearch.toLowerCase())
-  ).slice(0, 5); // Mostramos solo los 5 mejores resultados para no saturar la UI
+  ).slice(0, 5);
 
   const filteredInsumos = insumos.filter(i => 
     i.nombre?.toLowerCase().includes(productSearch.toLowerCase()) ||
@@ -102,7 +107,7 @@ export default function VentanillaView() {
     setActiveInsumo(null);
     setCantidadInput(1);
     setEmbalajeSeleccionado('null');
-    setProductSearch(''); // Limpiar búsqueda tras agregar
+    setProductSearch('');
   };
 
   const quitarInsumo = (bandejaId) => {
@@ -118,6 +123,7 @@ export default function VentanillaView() {
   // --------------------------------------------------------
   const handleConfirmar = async () => {
     if (bandeja.length === 0) return;
+    if (!edificio) return toastService.error('Debe seleccionar el edificio donde se realiza la operación.');
     if (tipoMovimiento === 'SALIDA' && !solicitante) {
       return toastService.error('Debe seleccionar un solicitante para registrar una salida.');
     }
@@ -125,37 +131,34 @@ export default function VentanillaView() {
     setIsSubmitting(true);
 
     try {
-      // 1. Mapear la bandeja al formato del payload del backend
       const itemsPayload = bandeja.map(item => ({
         productoId: item.productoId,
         cantidad: item.cantidadOperacion,
         embalajeId: item.embalajeId
       }));
 
+      // 🚀 SE AÑADE EL EDIFICIO AL PAYLOAD
       const payload = {
         tipo: tipoMovimiento,
+        edificio: edificio, 
         solicitanteId: solicitante ? solicitante.id : null,
-        encargadoId: user.id, // TODO: Aquí deberás poner el ID del usuario logueado usando tu Context de Auth
+        encargadoId: user.id, 
         observaciones: observaciones || null,
         items: itemsPayload
       };
 
-      // 2. Enviar petición POST
       const response = await api.post('/movimientos', payload);
       
-      // 3. Éxito: Notificar y limpiar
       toastService.success(response.data.message || 'Operación registrada con éxito.');
       setBandeja([]);
       setSolicitante(null);
       setObservaciones('');
       setUserSearch('');
       
-      // 4. Recargar el catálogo para ver el stock actualizado inmediatamente
       fetchInitialData();
 
     } catch (error) {
       console.error('Error en la transacción:', error);
-      // Extraemos el mensaje específico del backend (ej: "Stock insuficiente para Cloro")
       const mensaje = error.response?.data?.message || 'Error interno al procesar la operación.';
       toastService.error(mensaje);
     } finally {
@@ -169,26 +172,40 @@ export default function VentanillaView() {
   return (
     <div className="h-full flex flex-col animate-fade-in">
       
-      {/* Header y Selector de Tipo de Movimiento */}
+      {/* Header y Selectores Principales */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <div>
           <h2 className="text-2xl font-heading font-bold text-text-primary">Ventanilla Express</h2>
           <p className="text-text-muted text-sm mt-1">Registro rápido de entradas y salidas</p>
         </div>
         
-        <div className="flex bg-inputBg p-1 rounded-lg border border-border">
-          <button 
-            onClick={() => setTipoMovimiento('ENTRADA')}
-            className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${tipoMovimiento === 'ENTRADA' ? 'bg-[#10B981] text-white shadow-sm' : 'text-text-muted hover:text-text-secondary'}`}
+        <div className="flex flex-col sm:flex-row gap-3">
+          {/* 🚀 NUEVO: Selector de Edificio */}
+          <select
+            value={edificio}
+            onChange={(e) => setEdificio(e.target.value)}
+            className="bg-inputBg border border-border rounded-lg px-3 py-1.5 text-sm font-semibold text-text-primary outline-none focus:border-accent"
           >
-            Entrada (Surtir)
-          </button>
-          <button 
-            onClick={() => setTipoMovimiento('SALIDA')}
-            className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${tipoMovimiento === 'SALIDA' ? 'bg-accent text-white shadow-sm' : 'text-text-muted hover:text-text-secondary'}`}
-          >
-            Salida (Despachar)
-          </button>
+            {EDIFICIOS_DISPONIBLES.map(edif => (
+              <option key={edif} value={edif}>🏢 Sede: {edif}</option>
+            ))}
+          </select>
+
+          {/* Selector de Tipo */}
+          <div className="flex bg-inputBg p-1 rounded-lg border border-border">
+            <button 
+              onClick={() => setTipoMovimiento('ENTRADA')}
+              className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${tipoMovimiento === 'ENTRADA' ? 'bg-[#10B981] text-white shadow-sm' : 'text-text-muted hover:text-text-secondary'}`}
+            >
+              Entrada (Surtir)
+            </button>
+            <button 
+              onClick={() => setTipoMovimiento('SALIDA')}
+              className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${tipoMovimiento === 'SALIDA' ? 'bg-accent text-white shadow-sm' : 'text-text-muted hover:text-text-secondary'}`}
+            >
+              Salida (Despachar)
+            </button>
+          </div>
         </div>
       </div>
 
@@ -309,36 +326,45 @@ export default function VentanillaView() {
               </div>
             )}
 
-            {/* Lista de Insumos */}
+            {/* Lista de Insumos (Calcula Stock según el edificio seleccionado) */}
             <div className="space-y-2 overflow-y-auto pr-1">
               {loadingData ? (
                 <div className="p-4 text-center text-text-muted animate-pulse">Cargando catálogo...</div>
               ) : filteredInsumos.length > 0 ? (
-                filteredInsumos.map(insumo => (
-                  <div 
-                    key={insumo.id} 
-                    onClick={() => {
-                      setActiveInsumo(insumo);
-                      setCantidadInput(1);
-                      setEmbalajeSeleccionado('null');
-                    }}
-                    className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all group ${
-                      activeInsumo?.id === insumo.id 
-                        ? 'border-accent bg-accent/5' 
-                        : 'border-border bg-app hover:border-accent/50'
-                    }`}
-                  >
-                    <div>
-                      <p className="font-semibold text-text-primary text-sm">{insumo.nombre}</p>
-                      <p className={`text-xs font-mono mt-0.5 ${Number(insumo.stock_actual) <= Number(insumo.stock_minimo) ? 'text-red-500 font-bold' : 'text-text-muted'}`}>
-                        Stock: {Number(insumo.stock_actual).toFixed(2)} {insumo.unidad_medida}
-                      </p>
+                filteredInsumos.map(insumo => {
+                  
+                  // 🚀 CÁLCULO DE STOCK DINÁMICO POR EDIFICIO
+                  const existenciaEdificio = insumo.existencias?.find(e => e.edificio === edificio);
+                  const stockActualNum = existenciaEdificio ? Number(existenciaEdificio.stock_actual) : 0;
+                  const stockMinimoNum = existenciaEdificio ? Number(existenciaEdificio.stock_minimo) : 5;
+                  const isCritico = stockActualNum <= stockMinimoNum;
+
+                  return (
+                    <div 
+                      key={insumo.id} 
+                      onClick={() => {
+                        setActiveInsumo(insumo);
+                        setCantidadInput(1);
+                        setEmbalajeSeleccionado('null');
+                      }}
+                      className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all group ${
+                        activeInsumo?.id === insumo.id 
+                          ? 'border-accent bg-accent/5' 
+                          : 'border-border bg-app hover:border-accent/50'
+                      }`}
+                    >
+                      <div>
+                        <p className="font-semibold text-text-primary text-sm">{insumo.nombre}</p>
+                        <p className={`text-xs font-mono mt-0.5 ${isCritico && stockActualNum > 0 ? 'text-orange-500 font-bold' : isCritico ? 'text-red-500 font-bold' : 'text-text-muted'}`}>
+                          Stock en {edificio}: {stockActualNum.toFixed(2)} {insumo.unidad_medida}
+                        </p>
+                      </div>
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center border ${activeInsumo?.id === insumo.id ? 'border-accent bg-accent text-white' : 'border-border text-transparent group-hover:border-accent/50'}`}>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+                      </div>
                     </div>
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center border ${activeInsumo?.id === insumo.id ? 'border-accent bg-accent text-white' : 'border-border text-transparent group-hover:border-accent/50'}`}>
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <div className="p-4 text-center text-text-muted text-sm">No se encontraron productos.</div>
               )}
@@ -349,7 +375,7 @@ export default function VentanillaView() {
         {/* PANEL DERECHO: Resumen de Operación */}
         <div className="lg:col-span-5 bg-card border border-border rounded-xl shadow-sm flex flex-col overflow-hidden relative">
           
-          <div className="p-5 border-b border-border bg-inputBg flex items-center justify-between">
+          <div className="p-5 border-b border-border bg-inputBg flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <h3 className="font-heading font-bold text-sm uppercase text-text-primary tracking-wider flex items-center gap-2">
               <svg className="w-5 h-5 text-accent" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
               Resumen de la Transacción
