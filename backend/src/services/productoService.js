@@ -2,19 +2,18 @@ const prisma = require('../config/db');
 const auditoriaService = require('./auditoriaService');
 
 class ProductoService {
-    // Obtener todos los productos con sus opciones de embalaje a granel
+    // Obtener todos los productos con sus opciones de embalaje y existencias por edificio
     async obtenerTodos() {
         return await prisma.producto.findMany({
             include: {
-                embalajes: true
+                embalajes: true,
+                existencias: true //  Traemos el desglose geográfico
             },
-            orderBy: {
-                nombre: 'asc'
-            }
+            orderBy: { nombre: 'asc' }
         });
     }
 
-    // Buscar productos de forma predictiva por nombre o categoría (insensible a mayúsculas/minúsculas)
+    // Buscar productos de forma predictiva
     async buscarPorTermino(termino) {
         return await prisma.producto.findMany({
             where: {
@@ -24,33 +23,46 @@ class ProductoService {
                 ]
             },
             include: {
-                embalajes: true
+                embalajes: true,
+                existencias: true //  Traemos el desglose
             }
         });
     }
 
-    // Obtener el detalle de un solo producto por su ID
     async obtenerPorId(id) {
         return await prisma.producto.findUnique({
             where: { id: parseInt(id) },
             include: {
-                embalajes: true
+                embalajes: true,
+                existencias: true //  Traemos el desglose
             }
         });
     }
 
-    //CRUD de Productos 
-    // Crear un nuevo insumo básico
-    async crear(datos,usuarioOperadorId) {
+    // Crear un nuevo insumo y su stock inicial en un edificio
+    async crear(datos, usuarioOperadorId) {
+        const dataProducto = {
+            nombre: datos.nombre,
+            categoria: datos.categoria,
+            unidad_medida: datos.unidad_medida
+        };
+
+        // 🚀 Si el front envía el edificio inicial, lo creamos en cascada
+        if (datos.edificio) {
+            dataProducto.existencias = {
+                create: {
+                    edificio: datos.edificio,
+                    stock_actual: datos.stock_actual || 0,
+                    stock_minimo: datos.stock_minimo || 5
+                }
+            };
+        }
+
         const nuevoProducto = await prisma.producto.create({
-             data: {
-                nombre: datos.nombre,
-                categoria: datos.categoria,
-                unidad_medida: datos.unidad_medida,
-                stock_actual: datos.stock_actual || 0,
-                stock_minimo: datos.stock_minimo || 5
-            }
+            data: dataProducto,
+            include: { existencias: true }
         });
+
         await auditoriaService.registrar(
             usuarioOperadorId,
             'CREAR',
@@ -61,23 +73,26 @@ class ProductoService {
         return nuevoProducto;
     }
 
-    // Actualizar datos de un insumo existente
+    // Actualizar datos de un insumo existente (Stock y mínimo ya no van aquí)
     async actualizar(id, datos, usuarioOperadorId) {
         const productoAEditar = await prisma.producto.findUnique({
             where: { id: parseInt(id)}
         });
+        
         if(!productoAEditar){
             throw new Error ('NOT_FOUND');
         }
+
         const productoEditado = await prisma.producto.update({
             where: { id: parseInt(id) },
             data: {
                 nombre: datos.nombre,
                 categoria: datos.categoria,
-                unidad_medida: datos.unidad_medida,
-                stock_minimo: datos.stock_minimo
+                unidad_medida: datos.unidad_medida
+                //  Eliminamos stock_minimo de esta actualización
             }
         });
+
         await auditoriaService.registrar(
             usuarioOperadorId,
             'EDITAR',
@@ -86,32 +101,28 @@ class ProductoService {
             `Se editó al producto: ${productoAEditar.nombre} (id: ${productoAEditar.id}, Categoria: ${productoAEditar.categoria})`
         );
         return productoEditado;
-        
     }
 
-    // Eliminar un insumo (Solo si no tiene movimientos asociados)
     async eliminar(id, usuarioOperadorId) {
         try {
-            //obtener los datos del producto antes de borrarlo 
             const productoABorrar = await prisma.producto.findUnique({
                 where: {id: parseInt(id)}
             });
-            if(!productoABorrar){
-                throw new Error('NOT_FOUND');
-            }
+            if(!productoABorrar) throw new Error('NOT_FOUND');
+            
             const productoEliminado = await prisma.producto.delete({
                 where: { id: parseInt(id) }
             });
+            
             await auditoriaService.registrar(
                 usuarioOperadorId,
-                'ELIMINAR',               // Acción
-                'PRODUCTO',                // Entidad afectada
-                parseInt(id),             // ID de la entidad
-                `Se eliminó permanentemente al producto: ${productoABorrar.nombre} (ID: ${productoABorrar.id}, Categoria: ${productoABorrar.categoria})` // Detalles libres
+                'ELIMINAR',
+                'PRODUCTO',
+                parseInt(id),
+                `Se eliminó permanentemente al producto: ${productoABorrar.nombre} (ID: ${productoABorrar.id}, Categoria: ${productoABorrar.categoria})`
             );
-            return productoEliminado
+            return productoEliminado;
         } catch (error) {
-            // P2003 es el código de Prisma para "Fallo de restricción de llave foránea"
             if (error.code === 'P2003') {
                 throw new Error('No se puede eliminar el insumo porque tiene movimientos registrados en la bitácora.');
             }
@@ -119,8 +130,6 @@ class ProductoService {
         }
     }
 
-    //Gestion de Embalajes, rutas anidadas 
-    // Añadir un nuevo tipo de empaque a un producto
     async agregarEmbalaje(productoId, datos) {
         return await prisma.embalaje.create({
             data: {
@@ -131,15 +140,11 @@ class ProductoService {
         });
     }
 
-    // Eliminar un tipo de empaque (No rompe nada por el onDelete: Cascade)
     async eliminarEmbalaje(idEmbalaje) {
         return await prisma.embalaje.delete({
             where: { id: parseInt(idEmbalaje) }
         });
     }
-
-
-
 }
 
 module.exports = new ProductoService();
