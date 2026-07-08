@@ -4,20 +4,28 @@ import ReportModal from './ReportModal';
 import api from '../../services/api';
 import InsumoModal from '../../components/Modals/InsumoModal';
 import EditInsumoModal from '../../components/Modals/EditInsumoModal';
-import { toastService } from '../../services/toastService';
+import { toastService } from '../../services/toastService'; // Ajusta si es diferente
+
+// Los mismos edificios que en Ventanilla
+const EDIFICIOS_DISPONIBLES = ['ADM1', 'ADM2', 'ADM3', 'ADM4', 'LAB_SISTEMAS', 'BODEGA_CENTRAL'];
 
 export default function CatalogoView() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [edificioFiltro, setEdificioFiltro] = useState('TODOS'); //  Filtro geográfico
   const [selectedProduct, setSelectedProduct] = useState(null);
+  
+  // Modales y Drawer
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
-
-  // Estados para la conexión con el Backend
-  const [insumos, setInsumos] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [isInsumoModalOpen, setIsInsumoModalOpen]= useState(false);
   const [isEditInsumoModalOpen, setIsEditModalOpen] = useState(false);
+
+  // Estados para la conexión con el Backend
+  const [insumosRaw, setInsumosRaw] = useState([]); // Guardamos la data cruda
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+
 
   useEffect(() => {
     fetchProductos();
@@ -27,29 +35,9 @@ export default function CatalogoView() {
     try {
       setLoading(true);
       const response = await api.get('/productos');
-      
-      
-      const productosSeguros = response.data.map(item => {
-        // Convertimos el stock estrictamente a Número para evitar el crasheo del .toFixed()
-        const valorStock = item.stockActual || item.stock_actual || item.stock || 0;
-        const stockNumerico = Number(valorStock); 
-        
-        const valorMinimo = item.stockMinimo || item.stock_minimo || 5;
-        const stockMin = Number(valorMinimo);
-
-        let estadoCalculado = 'ok';
-        if (stockNumerico <= stockMin) estadoCalculado = 'low';
-        else if (stockNumerico <= stockMin * 2) estadoCalculado = 'mid';
-
-        return {
-          ...item,
-          stock: stockNumerico, // Lo estandarizamos a "stock" para el resto del frontend
-          stockMinimo: stockMin,
-          estado: estadoCalculado
-        };
-      });
-
-      setInsumos(productosSeguros);
+      //  Ahora guardamos la data cruda tal como viene, con su array de 'existencias'
+      setInsumosRaw(response.data); 
+      setError(null);
     } catch (error) {
       setError('No se pudo cargar la lista de productos. Verifica la conexión con la base de datos.');
       toastService.error('ERROR EN EL SERVIDOR');
@@ -58,45 +46,83 @@ export default function CatalogoView() {
     }
   };
 
-  // Filtrado de búsqueda seguro
-  const insumosFiltrados = insumos.filter(item => {
-    const nombre = item.nombre?.toLowerCase() || '';
-    const categoria = item.categoria?.toLowerCase() || '';
-    const query = searchTerm.toLowerCase();
-    
-    return nombre.includes(query) || categoria.includes(query);
-  });
+  //  Lógica de filtrado dinámico y cálculo matemático por edificio
+  const insumosProcesados = insumosRaw
+    .filter(item => {
+      // 1. Filtro por texto de búsqueda
+      const nombre = item.nombre?.toLowerCase() || '';
+      const categoria = item.categoria?.toLowerCase() || '';
+      const query = searchTerm.toLowerCase();
+      return nombre.includes(query) || categoria.includes(query);
+    })
+    .map(item => {
+      // 2. Cálculo de stock y mínimos basado en el edificio seleccionado
+      let stockNumerico = 0;
+      let stockMin = 0;
+
+      if (edificioFiltro === 'TODOS') {
+        // Sumar todo el inventario de todos los edificios
+        if (item.existencias && item.existencias.length > 0) {
+          stockNumerico = item.existencias.reduce((acc, curr) => acc + Number(curr.stock_actual), 0);
+          stockMin = item.existencias.reduce((acc, curr) => acc + Number(curr.stock_minimo), 0);
+        }
+      } else {
+        // Buscar el stock específico del edificio seleccionado
+        const existencia = item.existencias?.find(e => e.edificio === edificioFiltro);
+        if (existencia) {
+          stockNumerico = Number(existencia.stock_actual);
+          stockMin = Number(existencia.stock_minimo);
+        } else {
+          stockNumerico = 0;
+          stockMin = 5; // Default si nunca ha entrado a ese edificio
+        }
+      }
+
+      // 3. Determinar estado crítico de forma local al cálculo
+      let estadoCalculado = 'ok';
+      if (stockNumerico <= stockMin) estadoCalculado = 'low';
+      else if (stockNumerico <= stockMin * 2) estadoCalculado = 'mid';
+
+      // 4. Retornamos el objeto intacto pero inyectando nuestras propiedades calculadas
+      return {
+        ...item,
+        stockCalculado: stockNumerico,
+        stockMinimoCalculado: stockMin,
+        estadoCalculado
+      };
+    });
 
   const handleRowClick = (producto) => {
     setSelectedProduct(producto);
     setIsDrawerOpen(true);
   };
 
-  const handleOpenReport = (producto) => {
+  const handleOpenReport = () => {
     setIsDrawerOpen(false);
     setIsReportModalOpen(true);
   };
-  const handleOpenEdit = (producto) =>{
+
+  const handleOpenEdit = () => {
     setIsDrawerOpen(false);
     setIsEditModalOpen(true);
-  }
+  };
 
   return (
     <div className="flex flex-col h-full animate-fade-in">
       {/* Header de la sección */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-6 gap-4">
         <div>
           <h2 className="text-2xl font-heading font-bold text-text-primary">Catálogo General</h2>
-          <p className="text-text-muted text-sm mt-1">Gestión y control de inventario físico</p>
+          <p className="text-text-muted text-sm mt-1">Gestión y control de inventario multi-sede</p>
         </div>
         
-        {/* Buscador local y botones */}
-        <div className="flex gap-3 w-full sm:w-auto">
-           {/* Botón de recarga manual */}
+        {/* Controles: Refrescar, Sede, Búsqueda, Nuevo */}
+        <div className="flex flex-wrap gap-3 w-full xl:w-auto">
+          
           <button 
             onClick={fetchProductos}
             disabled={loading}
-            className="p-2 bg-card border border-border rounded-lg text-text-secondary hover:text-accent transition-colors disabled:opacity-50"
+            className="p-2.5 bg-card border border-border rounded-lg text-text-secondary hover:text-accent transition-colors disabled:opacity-50"
             title="Sincronizar directorio"
           >
             <svg className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -104,13 +130,28 @@ export default function CatalogoView() {
             </svg>
           </button>
 
+          {/*  Selector de Edificio */}
+          <select
+            value={edificioFiltro}
+
+
+            onChange={(e) => setEdificioFiltro(e.target.value)}
+            className="bg-inputBg border-[1.5px] border-border rounded-lg py-2 px-3 text-sm font-semibold text-text-primary outline-none focus:border-accent"
+          >
+            <option value="TODOS"> Stock Global (Todas las Sedes)</option>
+            {EDIFICIOS_DISPONIBLES.map(edif => (
+              <option key={edif} value={edif}> {edif}</option>
+            ))}
+          </select>
+
           <input 
             type="text" 
             placeholder="Filtrar catálogo..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="bg-inputBg border-[1.5px] border-border rounded-lg py-2 px-4 text-sm text-text-primary outline-none w-full sm:w-64 focus:border-accent focus:shadow-[0_0_0_3px_var(--color-accent-glow)] transition-all"
+            className="bg-inputBg border-[1.5px] border-border rounded-lg py-2 px-4 text-sm text-text-primary outline-none flex-1 min-w-[200px] focus:border-accent focus:shadow-[0_0_0_3px_var(--color-accent-glow)] transition-all"
           />
+          
           <button onClick={() => setIsInsumoModalOpen(true)}
              className="flex items-center justify-center gap-2 px-4 rounded-lg bg-text-primary text-app font-heading font-bold text-sm transition-opacity hover:opacity-85 whitespace-nowrap dark:bg-accent dark:text-[#002D4C]">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
@@ -128,10 +169,7 @@ export default function CatalogoView() {
         <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-8 text-center flex-1 flex flex-col items-center justify-center shadow-sm">
           <span className="text-3xl mb-3">⚠️</span>
           <p className="text-red-500 font-bold mb-2">{error}</p>
-          <button
-            onClick={fetchProductos}
-            className="px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-semibold hover:bg-red-600 transition-colors"
-          >
+          <button onClick={fetchProductos} className="px-4 py-2 mt-2 bg-red-500 text-white rounded-lg text-sm font-semibold hover:bg-red-600 transition-colors">
             Reintentar Conexión
           </button>
         </div>
@@ -144,12 +182,12 @@ export default function CatalogoView() {
                   <th className="p-4 text-[0.7rem] font-heading font-bold tracking-wider uppercase text-text-muted">ID</th>
                   <th className="p-4 text-[0.7rem] font-heading font-bold tracking-wider uppercase text-text-muted">Insumo</th>
                   <th className="p-4 text-[0.7rem] font-heading font-bold tracking-wider uppercase text-text-muted hidden sm:table-cell">Categoría</th>
-                  <th className="p-4 text-[0.7rem] font-heading font-bold tracking-wider uppercase text-text-muted text-right">Stock</th>
+                  <th className="p-4 text-[0.7rem] font-heading font-bold tracking-wider uppercase text-text-muted text-right">Stock {edificioFiltro !== 'TODOS' && `en ${edificioFiltro}`}</th>
                   <th className="p-4 text-[0.7rem] font-heading font-bold tracking-wider uppercase text-text-muted text-center">Estado</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {insumosFiltrados.map((item) => (
+                {insumosProcesados.map((item) => (
                   <tr
                     key={item.id}
                     onClick={() => handleRowClick(item)}
@@ -165,28 +203,24 @@ export default function CatalogoView() {
                       {item.categoria}
                     </td>
                     <td className="p-4 text-right">
+                      {/*  Renderizamos la variable calculada */}
                       <span className="font-heading font-bold text-accent text-base">
-                        {item.stock.toFixed(2)}
+                        {item.stockCalculado.toFixed(2)}
                       </span>
                       <span className="text-xs text-text-muted ml-1">
-                        {item.unidad}
+                        {item.unidad_medida}
                       </span>
                     </td>
                     <td className="p-4 text-center">
-                      {item.estado === "ok" && (
-                        <span className="bg-green-500/10 text-green-600 font-heading text-[0.7rem] font-bold px-3 py-1 rounded-full">
-                          NORMAL
-                        </span>
+                      {/*  Renderizamos el estado calculado dinámicamente */}
+                      {item.estadoCalculado === "ok" && (
+                        <span className="bg-green-500/10 text-green-600 font-heading text-[0.7rem] font-bold px-3 py-1 rounded-full">NORMAL</span>
                       )}
-                      {item.estado === "mid" && (
-                        <span className="bg-yellow-500/10 text-yellow-600 font-heading text-[0.7rem] font-bold px-3 py-1 rounded-full">
-                          MODERADO
-                        </span>
+                      {item.estadoCalculado === "mid" && (
+                        <span className="bg-yellow-500/10 text-yellow-600 font-heading text-[0.7rem] font-bold px-3 py-1 rounded-full">MODERADO</span>
                       )}
-                      {item.estado === "low" && (
-                        <span className="bg-red-500/10 text-red-500 font-heading text-[0.7rem] font-bold px-3 py-1 rounded-full">
-                          CRÍTICO
-                        </span>
+                      {item.estadoCalculado === "low" && (
+                        <span className="bg-red-500/10 text-red-500 font-heading text-[0.7rem] font-bold px-3 py-1 rounded-full">CRÍTICO</span>
                       )}
                     </td>
                   </tr>
@@ -194,7 +228,7 @@ export default function CatalogoView() {
               </tbody>
             </table>
 
-            {insumosFiltrados.length === 0 && (
+            {insumosProcesados.length === 0 && (
               <div className="p-8 text-center text-text-muted">
                 No se encontraron insumos que coincidan con la búsqueda.
               </div>
@@ -219,12 +253,13 @@ export default function CatalogoView() {
         initialScope="insumo"
         initialSubjectId={selectedProduct?.id}
       />
+      
       {/*Formulario Modal Insumo*/}
       <InsumoModal
         isOpen={isInsumoModalOpen}
         onClose={() => setIsInsumoModalOpen(false)}
         onSuccess={fetchProductos}
-        />
+      />
       
       {/*Formulario modal de edición */}
       <EditInsumoModal
@@ -232,7 +267,7 @@ export default function CatalogoView() {
         onClose={() => setIsEditModalOpen(false)}
         onSuccess={fetchProductos}
         insumo={selectedProduct} 
-        />
+      />
 
     </div>
   );
