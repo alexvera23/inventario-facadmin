@@ -282,7 +282,7 @@ function deepMerge(base, override) {
  * Genera el Excel (.xlsx) a partir de los datos del reporte.
  * Usa la librería xlsx (SheetJS).
  */
-async function generarExcel({ scope, labelMes, kpis, data, labelScope }) {
+async function generarExcel({ scope, labelMes, kpis, data, labelScope, alertas = [], incluirAlertas = false }) {
   const XLSX = await import('xlsx');
 
   const wb = XLSX.utils.book_new();
@@ -312,6 +312,11 @@ async function generarExcel({ scope, labelMes, kpis, data, labelScope }) {
     const salidas  = (data || []).filter(m => m.tipo === 'SALIDA').length;
     kpiRows.push(['Entradas procesadas', entradas, '']);
     kpiRows.push(['Salidas procesadas', salidas, '']);
+  }
+  if (scope === 'inventario') {
+    kpiRows.push(['Productos Registrados', kpis?.totalProductos ?? 0, 'En el edificio']);
+    kpiRows.push(['Insumos Críticos', kpis?.criticos ?? 0, 'Bajo stock mínimo']);
+    kpiRows.push(['Unidades en Stock', kpis?.totalUnidades ?? 0, 'Suma total del edificio']);
   }
 
   const wsKpis = XLSX.utils.aoa_to_sheet(kpiRows);
@@ -381,6 +386,42 @@ async function generarExcel({ scope, labelMes, kpis, data, labelScope }) {
     XLSX.utils.book_append_sheet(wb, ws, 'Actividad');
   }
 
+  if (scope === 'inventario' && Array.isArray(data)) {
+    const rows = [['Producto', 'Categoría', 'Unidad', 'Stock Actual', 'Stock Mínimo', 'Estado']];
+    data.forEach(it => {
+      const critico = Number(it.stock_actual) <= Number(it.stock_minimo);
+      rows.push([
+        it.producto?.nombre || `#${it.producto_id}`,
+        it.producto?.categoria || '',
+        it.producto?.unidad_medida || '',
+        it.stock_actual,
+        it.stock_minimo,
+        critico ? 'CRÍTICO' : 'OK'
+      ]);
+    });
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 28 }, { wch: 18 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 10 }];
+    XLSX.utils.book_append_sheet(wb, ws, 'Inventario');
+  }
+
+  // ── Hoja adicional: Alertas de stock crítico (histórico, independiente del alcance) ──
+  if (incluirAlertas && alertas.length > 0) {
+    const rows = [['Fecha', 'Producto', 'Unidad', 'Edificio', 'Stock al Momento', 'Stock Mínimo']];
+    alertas.forEach(a => {
+      rows.push([
+        a.fecha ? new Date(a.fecha).toLocaleDateString('es-MX') : '',
+        a.producto,
+        a.unidad,
+        a.edificio,
+        a.stockAlMomento ?? '',
+        a.stockMinimo ?? ''
+      ]);
+    });
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 14 }, { wch: 28 }, { wch: 10 }, { wch: 18 }, { wch: 16 }, { wch: 14 }];
+    XLSX.utils.book_append_sheet(wb, ws, 'Alertas Críticas');
+  }
+
   const filename = `reporte_facdamin_${scope}_${labelMes.replace(' ', '_')}.xlsx`;
   XLSX.writeFile(wb, filename);
   toastService.success('Reporte Excel generado exitosamente');
@@ -393,7 +434,8 @@ async function generarExcel({ scope, labelMes, kpis, data, labelScope }) {
 async function generarPDF({ scope, labelMes, kpis, data, labelScope, incluir,
                              /* chartRefs ya no se usa, se mantiene por compatibilidad */
                              lineChartData, doughnutData, topInsumosData, deptosData,
-                             insumoChartData, usuarioChartData }) {
+                             insumoChartData, usuarioChartData, inventarioChartData,
+                             alertas = [] }) {
   const { default: jsPDF } = await import('jspdf');
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -690,6 +732,64 @@ async function generarPDF({ scope, labelMes, kpis, data, labelScope, incluir,
     }
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // SCOPE: INVENTARIO POR EDIFICIO
+  // ══════════════════════════════════════════════════════════════════════════
+  if (scope === 'inventario' && Array.isArray(data)) {
+    if (incluir.kpis) {
+      drawSectionTitle('Indicadores del Edificio');
+      drawKpiRow([
+        { label: 'Productos',         value: kpis?.totalProductos ?? data.length, sub: 'registrados' },
+        { label: 'Insumos Críticos',  value: kpis?.criticos ?? 0, sub: 'bajo stock mínimo', danger: (kpis?.criticos ?? 0) > 0 },
+        { label: 'Unidades en Stock', value: (kpis?.totalUnidades ?? 0).toLocaleString?.('es-MX') ?? kpis?.totalUnidades, sub: 'suma total' },
+      ]);
+    }
+
+    if (incluir.graficaTendencia && inventarioChartData?.labels?.length) {
+      drawSectionTitle('Stock Actual vs. Mínimo (Top 10)');
+      const img = await renderChartOffscreen('bar', inventarioChartData);
+      addChartPNG(img, 62);
+    }
+
+    if (incluir.movimientos && data.length) {
+      drawSectionTitle('Desglose de Inventario');
+      const rows = data.map(it => {
+        const critico = Number(it.stock_actual) <= Number(it.stock_minimo);
+        return [
+          it.producto?.nombre || `#${it.producto_id}`,
+          it.producto?.categoria || '—',
+          it.stock_actual,
+          it.stock_minimo,
+          critico ? 'CRÍTICO' : 'OK'
+        ];
+      });
+      drawTable(
+        ['Producto', 'Categoría', 'Stock Actual', 'Stock Mín.', 'Estado'],
+        rows,
+        [58, 40, 30, 26, 24]
+      );
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ALERTAS DE STOCK CRÍTICO (histórico global, independiente del alcance)
+  // ══════════════════════════════════════════════════════════════════════════
+  if (incluir.alertas && alertas.length) {
+    drawSectionTitle('Alertas de Stock Crítico · Histórico');
+    const rows = alertas.map(a => [
+      a.fecha ? new Date(a.fecha).toLocaleDateString('es-MX') : '—',
+      a.producto,
+      a.edificio,
+      a.stockAlMomento ?? '—',
+      a.stockMinimo ?? '—'
+    ]);
+    drawTable(
+      ['Fecha', 'Producto', 'Edificio', 'Stock', 'Mínimo'],
+      rows,
+      [26, 56, 40, 26, 30]
+    );
+  }
+
   // ── PIE DE PÁGINA ──────────────────────────────────────────────────────
   const totalPages = doc.internal.getNumberOfPages();
   for (let p = 1; p <= totalPages; p++) {
@@ -737,6 +837,28 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
   const [error,       setError]       = useState(null);
   const [generando,   setGenerando]   = useState(null);
 
+  // ── Alcance "Por Edificio": texto libre para buscar el edificio ────────
+  const [edificioInput, setEdificioInput] = useState('');
+  const buscarEdificio = () => setSubjectId(edificioInput.trim() || null);
+
+  // ── Alertas de stock crítico (histórico global, independiente del alcance) ─
+  const [alertasData,     setAlertasData]     = useState(null);
+  const [alertasCargando, setAlertasCargando] = useState(false);
+  const [alertasError,    setAlertasError]    = useState(null);
+
+  const fetchAlertas = useCallback(async () => {
+    setAlertasCargando(true);
+    setAlertasError(null);
+    try {
+      const res = await api.get('/inventario/alertas-criticas');
+      setAlertasData(res.data || []);
+    } catch (err) {
+      setAlertasError(err.response?.data?.message || err.message || 'Error al cargar alertas');
+    } finally {
+      setAlertasCargando(false);
+    }
+  }, []);
+
   // ── Refs de los charts para la previsualización UI (sin cambios) ───────
   const lineChartRef     = useRef(null);
   const doughnutChartRef = useRef(null);
@@ -750,10 +872,18 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
     if (isOpen) {
       setScope(initialScope);
       setSubjectId(initialSubjectId);
+      setEdificioInput(initialScope === 'inventario' && initialSubjectId ? String(initialSubjectId) : '');
       setPreviewData(null);
       setError(null);
+      setAlertasData(null);
+      setAlertasError(null);
     }
   }, [isOpen, initialScope, initialSubjectId]);
+
+  // Cargar alertas críticas la primera vez que se activa el checkbox
+  useEffect(() => {
+    if (isOpen && incluir.alertas && alertasData === null && !alertasCargando) fetchAlertas();
+  }, [isOpen, incluir.alertas, alertasData, alertasCargando, fetchAlertas]);
 
   // ── Cargar catálogos al montar ─────────────────────────────────────────
   useEffect(() => {
@@ -784,6 +914,9 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
         const p = modoPeriodo === 'mes' ? 'mes' : (periodo || 'semana');
         res = await api.get(`/reportes/usuario/${subjectId}?periodo=${p}`);
         setPreviewData({ tipo: 'usuario', data: res.data });
+      } else if (scope === 'inventario') {
+        res = await api.get(`/inventario/edificio/${encodeURIComponent(subjectId)}`);
+        setPreviewData({ tipo: 'inventario', data: res.data || [] });
       }
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Error al cargar los datos');
@@ -809,6 +942,9 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
       const u = catalogoUsuarios.find(u => String(u.id) === String(subjectId));
       return u ? `Usuario: ${u.nombre}` : 'Usuario seleccionado';
     }
+    if (scope === 'inventario') {
+      return subjectId ? `Edificio: ${subjectId}` : 'Edificio seleccionado';
+    }
     return scope;
   })();
 
@@ -817,6 +953,9 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
   const insumoData    = previewData?.tipo === 'insumo'   ? previewData.data : null;
   const usuarioData   = previewData?.tipo === 'usuario'
     ? (Array.isArray(previewData.data) ? previewData.data : (previewData.data?.datos ?? []))
+    : null;
+  const inventarioData = previewData?.tipo === 'inventario'
+    ? (Array.isArray(previewData.data) ? previewData.data : [])
     : null;
 
   // ── Datasets (compartidos entre preview UI y generación offscreen) ─────
@@ -879,6 +1018,46 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
     };
   })() : null;
 
+  // ── Inventario por edificio: KPIs y dataset de la gráfica ──────────────
+  const esCritico = (item) => Number(item.stock_actual) <= Number(item.stock_minimo);
+
+  const inventarioKpis = inventarioData ? {
+    totalProductos: inventarioData.length,
+    criticos: inventarioData.filter(esCritico).length,
+    totalUnidades: inventarioData.reduce((acc, it) => acc + (Number(it.stock_actual) || 0), 0),
+  } : null;
+
+  const inventarioChartData = inventarioData && inventarioData.length > 0 ? (() => {
+    const ordenado = [...inventarioData].sort((a, b) => Number(b.stock_actual) - Number(a.stock_actual)).slice(0, 10);
+    return {
+      labels: ordenado.map(it => it.producto?.nombre || `#${it.producto_id}`),
+      datasets: [
+        {
+          label: 'Stock Actual',
+          data: ordenado.map(it => Number(it.stock_actual) || 0),
+          backgroundColor: ordenado.map(it => esCritico(it) ? PALETTE.rose : PALETTE.cyan),
+          borderRadius: 6
+        },
+        {
+          label: 'Stock Mínimo',
+          data: ordenado.map(it => Number(it.stock_minimo) || 0),
+          backgroundColor: 'rgba(148,163,184,0.35)',
+          borderRadius: 6
+        }
+      ]
+    };
+  })() : null;
+
+  // ── Alertas críticas: dataset de tabla normalizado (nombres de campo defensivos) ─
+  const alertasFilas = (alertasData || []).map(a => ({
+    fecha: a.fecha,
+    producto: a.producto?.nombre || `Producto #${a.producto_id ?? '—'}`,
+    unidad: a.producto?.unidad_medida || '',
+    edificio: a.edificio || '—',
+    stockAlMomento: a.stock_actual ?? a.stock_al_momento ?? a.cantidad ?? null,
+    stockMinimo: a.stock_minimo ?? null,
+  }));
+
   // ── Exportar ───────────────────────────────────────────────────────────
   const handleExportar = async (formato) => {
     if (!previewData) return;
@@ -893,6 +1072,9 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
       } else if (previewData.tipo === 'insumo') {
         data = previewData.data;
         kpis = previewData.data?.estadisticas;
+      } else if (previewData.tipo === 'inventario') {
+        data = inventarioData;
+        kpis = inventarioKpis;
       } else {
         data = Array.isArray(previewData.data)
           ? previewData.data
@@ -900,8 +1082,10 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
         kpis = null;
       }
 
+      const alertas = incluir.alertas ? alertasFilas : [];
+
       if (formato === 'excel') {
-        await generarExcel({ scope, labelMes, kpis, data, labelScope });
+        await generarExcel({ scope, labelMes, kpis, data, labelScope, alertas, incluirAlertas: incluir.alertas });
       } else {
         // Pasar los datasets calculados para que generarPDF los use en offscreen
         await generarPDF({
@@ -912,6 +1096,8 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
           deptosData,
           insumoChartData,
           usuarioChartData,
+          inventarioChartData,
+          alertas,
         });
       }
     } catch (e) {
@@ -972,9 +1158,10 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
               <Section title="Alcance">
                 <div className="flex flex-col gap-1.5">
                   {[
-                    { key: 'global',  label: 'Global',  icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
-                    { key: 'insumo',  label: 'Por Insumo', icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 10V7' },
-                    { key: 'usuario', label: 'Por Usuario', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
+                    { key: 'global',     label: 'Global',       icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
+                    { key: 'insumo',     label: 'Por Insumo',   icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 10V7' },
+                    { key: 'usuario',    label: 'Por Usuario',  icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
+                    { key: 'inventario', label: 'Por Edificio', icon: 'M3 21h18M5 21V5a2 2 0 012-2h10a2 2 0 012 2v16M9 21V9h6v12M9 6h.01M9 12h.01M15 6h.01M15 12h.01' },
                   ].map(({ key, label, icon }) => (
                     <button
                       key={key}
@@ -995,7 +1182,7 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
               </Section>
 
               {/* Selector dinámico */}
-              {scope !== 'global' && (
+              {scope !== 'global' && scope !== 'inventario' && (
                 <Section title={scope === 'insumo' ? 'Seleccionar Insumo' : 'Seleccionar Usuario'}>
                   <select
                     value={subjectId || ''}
@@ -1008,6 +1195,36 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                       : catalogoUsuarios.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)
                     }
                   </select>
+                </Section>
+              )}
+
+              {/* Selector de edificio (texto libre: el catálogo de edificios vive
+                  en stock_edificio y aún no hay endpoint de listado) */}
+              {scope === 'inventario' && (
+                <Section title="Edificio">
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={edificioInput}
+                      onChange={e => setEdificioInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') buscarEdificio(); }}
+                      placeholder="Ej. Edificio 14A"
+                      className="flex-1 min-w-0 bg-inputBg border-[1.5px] border-border rounded-lg py-2 px-3 text-[0.82rem] text-text-primary outline-none focus:border-accent"
+                    />
+                    <button
+                      onClick={buscarEdificio}
+                      disabled={!edificioInput.trim()}
+                      className="px-3 py-2 bg-inputBg border border-border rounded-lg text-text-secondary hover:border-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      title="Buscar"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z"/>
+                      </svg>
+                    </button>
+                  </div>
+                  <p className="text-[0.65rem] text-text-muted mt-1.5">
+                    Escribe el nombre exacto del edificio y presiona Enter o el botón de búsqueda.
+                  </p>
                 </Section>
               )}
 
@@ -1114,7 +1331,9 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                   <svg className="w-10 h-10 opacity-30" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5"/>
                   </svg>
-                  <p className="text-sm">Selecciona un {scope} para previsualizar el reporte</p>
+                  <p className="text-sm">
+                    {scope === 'inventario' ? 'Escribe el nombre de un edificio para previsualizar su inventario' : `Selecciona un ${scope} para previsualizar el reporte`}
+                  </p>
                 </div>
               )}
 
@@ -1336,7 +1555,126 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                       )}
                     </>
                   )}
+
+                  {/* ── INVENTARIO POR EDIFICIO ──────────────────────── */}
+                  {previewData.tipo === 'inventario' && Array.isArray(inventarioData) && (
+                    <>
+                      {inventarioData.length === 0 ? (
+                        <div className="flex-1 flex flex-col items-center justify-center gap-2 text-text-muted py-10">
+                          <svg className="w-10 h-10 opacity-30" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 10V7"/>
+                          </svg>
+                          <p className="text-sm">Sin registros de stock para este edificio</p>
+                        </div>
+                      ) : (
+                        <>
+                          {incluir.kpis && (
+                            <div className="grid grid-cols-3 gap-3">
+                              <KpiCard label="Productos" value={inventarioKpis?.totalProductos} sub="registrados en el edificio" />
+                              <KpiCard label="Insumos Críticos" value={inventarioKpis?.criticos} colorClass={inventarioKpis?.criticos > 0 ? 'text-red-400' : 'text-text-primary'} sub="bajo stock mínimo" />
+                              <KpiCard label="Unidades en Stock" value={inventarioKpis?.totalUnidades?.toLocaleString('es-MX')} sub="suma total" />
+                            </div>
+                          )}
+
+                          {incluir.graficaTendencia && inventarioChartData && (
+                            <div className="bg-card border border-border rounded-xl p-4">
+                              <p className="text-[0.7rem] font-heading font-bold uppercase tracking-wider text-text-muted mb-3">Stock Actual vs. Mínimo (Top 10)</p>
+                              <div className="h-[200px]">
+                                <Bar data={inventarioChartData} options={commonChartOpts} />
+                              </div>
+                            </div>
+                          )}
+
+                          {incluir.movimientos && (
+                            <div className="bg-card border border-border rounded-xl overflow-hidden">
+                              <div className="px-4 py-2.5 border-b border-border">
+                                <p className="text-[0.7rem] font-heading font-bold uppercase tracking-wider text-text-muted">
+                                  Desglose · {inventarioData.length} productos
+                                </p>
+                              </div>
+                              <div className="overflow-x-auto max-h-[260px] overflow-y-auto">
+                                <table className="w-full text-[0.78rem]">
+                                  <thead className="bg-inputBg sticky top-0">
+                                    <tr>
+                                      {['Producto', 'Categoría', 'Stock Actual', 'Stock Mínimo', 'Estado'].map(h => (
+                                        <th key={h} className="px-3 py-2 text-left text-[0.65rem] font-heading font-bold uppercase tracking-wide text-text-muted">{h}</th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {inventarioData.map((it, i) => {
+                                      const critico = esCritico(it);
+                                      return (
+                                        <tr key={it.id ?? i} className="border-t border-border/50 hover:bg-inputBg/50">
+                                          <td className="px-3 py-2 text-text-primary font-medium">{it.producto?.nombre || `#${it.producto_id}`}</td>
+                                          <td className="px-3 py-2 text-text-secondary">{it.producto?.categoria || '—'}</td>
+                                          <td className="px-3 py-2 font-semibold text-text-primary">{it.stock_actual} <span className="text-text-muted text-[0.7rem]">{it.producto?.unidad_medida}</span></td>
+                                          <td className="px-3 py-2 text-text-muted">{it.stock_minimo}</td>
+                                          <td className="px-3 py-2">
+                                            <span className={`px-1.5 py-0.5 rounded text-[0.65rem] font-bold ${critico ? 'bg-red-500/15 text-red-400' : 'bg-emerald-500/15 text-emerald-400'}`}>
+                                              {critico ? 'CRÍTICO' : 'OK'}
+                                            </span>
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </>
+                  )}
                 </>
+              )}
+
+              {/* ── ALERTAS DE STOCK CRÍTICO (histórico global, cualquier alcance) ── */}
+              {incluir.alertas && (
+                <div className="bg-card border border-border rounded-xl overflow-hidden">
+                  <div className="px-4 py-2.5 border-b border-border flex items-center justify-between">
+                    <p className="text-[0.7rem] font-heading font-bold uppercase tracking-wider text-text-muted">
+                      Alertas de Stock Crítico · Histórico
+                    </p>
+                    {alertasCargando && <Spinner className="w-3.5 h-3.5 text-accent" />}
+                  </div>
+
+                  {alertasError && !alertasCargando && (
+                    <div className="px-4 py-3 text-xs text-red-400 flex items-center justify-between gap-2">
+                      <span>{alertasError}</span>
+                      <button onClick={fetchAlertas} className="font-bold underline hover:no-underline shrink-0">Reintentar</button>
+                    </div>
+                  )}
+
+                  {!alertasCargando && !alertasError && alertasFilas.length === 0 && (
+                    <p className="px-4 py-3 text-xs text-text-muted italic">Sin registros de desabasto en el histórico</p>
+                  )}
+
+                  {!alertasCargando && !alertasError && alertasFilas.length > 0 && (
+                    <div className="overflow-x-auto max-h-[200px] overflow-y-auto">
+                      <table className="w-full text-[0.78rem]">
+                        <thead className="bg-inputBg sticky top-0">
+                          <tr>
+                            {['Fecha', 'Producto', 'Edificio', 'Stock al momento'].map(h => (
+                              <th key={h} className="px-3 py-2 text-left text-[0.65rem] font-heading font-bold uppercase tracking-wide text-text-muted">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {alertasFilas.map((a, i) => (
+                            <tr key={i} className="border-t border-border/50 hover:bg-inputBg/50">
+                              <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{a.fecha ? new Date(a.fecha).toLocaleDateString('es-MX') : '—'}</td>
+                              <td className="px-3 py-2 text-text-primary font-medium">{a.producto} {a.unidad && <span className="text-text-muted text-[0.7rem]">({a.unidad})</span>}</td>
+                              <td className="px-3 py-2 text-text-secondary">{a.edificio}</td>
+                              <td className="px-3 py-2 font-semibold text-red-400">{a.stockAlMomento ?? '—'}{a.stockMinimo != null ? ` / min. ${a.stockMinimo}` : ''}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -1350,7 +1688,9 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
             <div className="flex items-center gap-2 ml-auto">
               {!puedeExportar && !cargando && (
                 <p className="text-[0.72rem] text-text-muted italic mr-2">
-                  {necesitaSujeto && !subjectId ? `Selecciona un ${scope}` : 'Sin datos disponibles'}
+                  {necesitaSujeto && !subjectId
+                    ? (scope === 'inventario' ? 'Ingresa un edificio' : `Selecciona un ${scope}`)
+                    : 'Sin datos disponibles'}
                 </p>
               )}
 
