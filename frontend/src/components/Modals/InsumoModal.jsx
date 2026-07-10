@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
 import api from '../../services/api';
-import { toastService } from '../../services/toastService';
+import { toastService } from '../../services/toastService'; // Ajusta la ruta si es necesario
+
+// Lista de edificios disponibles (Misma que en Ventanilla y Catálogo)
+const EDIFICIOS_DISPONIBLES = ['ADM1', 'ADM2', 'ADM3', 'ADM4', 'LAB_SISTEMAS', 'BODEGA_CENTRAL'];
 
 export default function InsumoModal({ isOpen, onClose, onSuccess }) {
-  // 1. Estado para los datos básicos del insumo
+  // 1. Estado para los datos básicos del insumo (Ahora incluye edificio inicial)
   const [formData, setFormData] = useState({
     nombre: '',
     categoria: 'Limpieza',
     unidad_medida: 'Pzas',
+    edificio: 'ADM1', // Sede por defecto para el primer inventario
     stock_actual: '',
     stock_minimo: ''
   });
@@ -45,24 +49,26 @@ export default function InsumoModal({ isOpen, onClose, onSuccess }) {
 
     try {
       // 1. Preparar payload del insumo principal
+      // El backend ahora espera el 'edificio' para crear la primera relación en StockEdificio
       const payloadInsumo = {
-        ...formData,
+        nombre: formData.nombre,
+        categoria: formData.categoria,
+        unidad_medida: formData.unidad_medida,
+        edificio: formData.edificio, // 🚀 SE ENVÍA EL EDIFICIO AL BACKEND
         stock_actual: parseFloat(formData.stock_actual) || 0,
-        stock_minimo: parseFloat(formData.stock_minimo) || 0
+        stock_minimo: parseFloat(formData.stock_minimo) || 5
       };
 
       // 2. Crear el insumo en el backend
       const resProducto = await api.post('/productos', payloadInsumo);
       
-      // Extraemos el ID generado (Ajusta resProducto.data.id si tu backend lo anida en .data.data)
+      // Extraemos el ID generado
       const productoId = resProducto.data?.data?.id || resProducto.data?.id;
 
       // 3. Registrar los embalajes vinculados (Si agregó alguno)
       if (productoId && embalajes.length > 0) {
-        // Filtramos por si dejaron alguna fila en blanco a medias
-        const embalajesValidos = embalajes.filter(e => e.nombre_embalaje.trim() !== '' && e.factor_conversion > 0);
+        const embalajesValidos = embalajes.filter(e => e.nombre_embalaje.trim() !== '' && parseFloat(e.factor_conversion) > 0);
         
-        // Ejecutamos todas las peticiones de embalaje en paralelo
         await Promise.all(
           embalajesValidos.map(emb => 
             api.post(`/productos/${productoId}/embalajes`, {
@@ -76,7 +82,7 @@ export default function InsumoModal({ isOpen, onClose, onSuccess }) {
       toastService.success('Insumo y embalajes registrados correctamente.');
       
       // 4. Limpiar formulario y notificar a la vista padre
-      setFormData({ nombre: '', categoria: '', unidad_medida: 'Pzas', stock_actual: '', stock_minimo: '' });
+      setFormData({ nombre: '', categoria: 'Limpieza', unidad_medida: 'Pzas', edificio: 'ADM1', stock_actual: '', stock_minimo: '' });
       setEmbalajes([]);
       onSuccess();
       onClose();
@@ -94,7 +100,7 @@ export default function InsumoModal({ isOpen, onClose, onSuccess }) {
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
 
-      {/* Modal Content - Ajustamos el max-height para que haga scroll si agregan muchos embalajes */}
+      {/* Modal Content */}
       <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col animate-fade-in-up">
         
         {/* Header */}
@@ -152,22 +158,41 @@ export default function InsumoModal({ isOpen, onClose, onSuccess }) {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[0.7rem] font-heading font-bold uppercase text-text-muted mb-1.5">Stock Físico Inicial</label>
-                <input 
-                  type="number" step="0.01" name="stock_actual" value={formData.stock_actual} onChange={handleChange}
-                  placeholder="0.00" 
-                  className="w-full bg-inputBg border border-border rounded-lg p-2.5 text-sm font-mono text-text-primary outline-none focus:border-accent"
-                />
+            {/* 🚀 NUEVA ZONA DE INVENTARIO INICIAL POR EDIFICIO */}
+            <div className="p-4 border border-accent/30 bg-accent/5 rounded-xl">
+              <p className="text-[0.65rem] font-heading font-bold uppercase text-accent mb-3 tracking-widest">
+                Inventario Inicial (Opcional)
+              </p>
+              
+              <div className="mb-3">
+                <label className="block text-[0.7rem] font-heading font-bold uppercase text-text-primary mb-1.5">Ubicación / Sede</label>
+                <select 
+                  name="edificio" value={formData.edificio} onChange={handleChange}
+                  className="w-full bg-card border border-border rounded-lg p-2 text-sm text-text-primary outline-none focus:border-accent"
+                >
+                  {EDIFICIOS_DISPONIBLES.map(edif => (
+                    <option key={edif} value={edif}>{edif}</option>
+                  ))}
+                </select>
               </div>
-              <div>
-                <label className="block text-[0.7rem] font-heading font-bold uppercase text-text-muted mb-1.5">Stock Mínimo Alerta *</label>
-                <input 
-                  type="number" step="0.01" name="stock_minimo" required value={formData.stock_minimo} onChange={handleChange}
-                  placeholder="Ej. 5" 
-                  className="w-full bg-inputBg border border-border rounded-lg p-2.5 text-sm font-mono text-text-primary outline-none focus:border-accent"
-                />
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[0.7rem] font-heading font-bold uppercase text-text-primary mb-1.5">Stock Físico</label>
+                  <input 
+                    type="number" step="0.01" name="stock_actual" value={formData.stock_actual} onChange={handleChange}
+                    placeholder="0.00" 
+                    className="w-full bg-card border border-border rounded-lg p-2.5 text-sm font-mono text-text-primary outline-none focus:border-accent shadow-inner"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[0.7rem] font-heading font-bold uppercase text-text-primary mb-1.5">Alerta Mínima</label>
+                  <input 
+                    type="number" step="0.01" name="stock_minimo" value={formData.stock_minimo} onChange={handleChange}
+                    placeholder="Ej. 5" 
+                    className="w-full bg-card border border-border rounded-lg p-2.5 text-sm font-mono text-text-primary outline-none focus:border-accent shadow-inner"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -179,7 +204,7 @@ export default function InsumoModal({ isOpen, onClose, onSuccess }) {
             <div className="flex justify-between items-center mb-3">
               <div>
                 <label className="block text-[0.75rem] font-heading font-bold uppercase text-text-primary">Presentaciones de Empaque</label>
-                <p className="text-[0.65rem] text-text-muted">Agrega cajas, botes o paquetes que multipliquen la unidad base.</p>
+                <p className="text-[0.65rem] text-text-muted">Agrega cajas o paquetes que multipliquen la unidad base.</p>
               </div>
               <button 
                 type="button" onClick={addEmbalaje}
