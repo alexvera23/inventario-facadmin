@@ -282,7 +282,7 @@ function deepMerge(base, override) {
  * Genera el Excel (.xlsx) a partir de los datos del reporte.
  * Usa la librería xlsx (SheetJS).
  */
-async function generarExcel({ scope, labelMes, kpis, data, labelScope, alertas = [], incluirAlertas = false }) {
+export async function generarExcel({ scope, labelMes, kpis, data, labelScope, alertas = [], incluirAlertas = false }) {
   const XLSX = await import('xlsx');
 
   const wb = XLSX.utils.book_new();
@@ -431,7 +431,7 @@ async function generarExcel({ scope, labelMes, kpis, data, labelScope, alertas =
  * Genera el PDF usando jsPDF + gráficas renderizadas en canvas offscreen.
  * Cada gráfica se fabrica en memoria a 1600×700px, se exporta y se destruye.
  */
-async function generarPDF({ scope, labelMes, kpis, data, labelScope, incluir,
+export async function generarPDF({ scope, labelMes, kpis, data, labelScope, incluir,
                              /* chartRefs ya no se usa, se mantiene por compatibilidad */
                              lineChartData, doughnutData, topInsumosData, deptosData,
                              insumoChartData, usuarioChartData, inventarioChartData,
@@ -810,7 +810,7 @@ async function generarPDF({ scope, labelMes, kpis, data, labelScope, incluir,
 // ══════════════════════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
 // ══════════════════════════════════════════════════════════════════════════════
-export default function ReportModal({ isOpen, onClose, initialScope = 'global', initialSubjectId = null }) {
+export default function ReportModal({ isOpen, onClose, initialScope = 'global', initialSubjectId = null, initialIncluirAlertas = false }) {
   // ── Configuración del reporte ──────────────────────────────────────────
   const [scope,    setScope]    = useState(initialScope);
   const [subjectId, setSubjectId] = useState(initialSubjectId);
@@ -824,7 +824,7 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
     movimientos:      true,
     graficaTendencia: true,
     kpis:             true,
-    alertas:          false,
+    alertas:          initialIncluirAlertas,
   });
 
   // ── Catálogos para el selector dinámico ───────────────────────────────
@@ -877,8 +877,9 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
       setError(null);
       setAlertasData(null);
       setAlertasError(null);
+      setIncluir(prev => ({ ...prev, alertas: initialIncluirAlertas }));
     }
-  }, [isOpen, initialScope, initialSubjectId]);
+  }, [isOpen, initialScope, initialSubjectId, initialIncluirAlertas]);
 
   // Cargar alertas críticas la primera vez que se activa el checkbox
   useEffect(() => {

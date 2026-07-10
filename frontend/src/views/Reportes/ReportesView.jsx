@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import ReportModal from '../Catalogo/ReportModal';
+import ReportModal, { generarPDF, generarExcel } from '../Catalogo/ReportModal';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -41,6 +41,18 @@ function ChartSkeleton({ className = '' }) {
     <div className={`bg-card border border-border rounded-xl shadow-sm p-5 flex flex-col animate-pulse ${className}`}>
       <div className="h-3 w-40 bg-border rounded-full mb-6" />
       <div className="flex-1 bg-border/40 rounded-lg min-h-[220px]" />
+    </div>
+  );
+}
+
+// ─── Skeleton para la lista de alertas críticas ────────────────────────────
+function AlertasSkeleton() {
+  return (
+    <div className="bg-card border border-border rounded-xl shadow-sm p-5 animate-pulse">
+      <div className="h-3 w-48 bg-border rounded-full mb-4" />
+      {[0, 1, 2].map(i => (
+        <div key={i} className="h-10 w-full bg-border/40 rounded-lg mb-2" />
+      ))}
     </div>
   );
 }
@@ -210,12 +222,22 @@ function transformarDatos(data) {
 // ════════════════════════════════════════════════════════════════════════════
 export default function ReportesView() {
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  // Configuración con la que se abrirá el modal (permite deep-links desde KPIs/widgets)
+  const [modalConfig, setModalConfig] = useState({ scope: 'global', subjectId: null, incluirAlertas: false });
   const [mesSeleccionado, setMesSeleccionado] = useState(MESES[0].value);
 
   // Estado del dashboard
   const [dashboardData, setDashboardData] = useState(null);
   const [cargando, setCargando]           = useState(true);
   const [error, setError]                 = useState(null);
+
+  // Estado de exportación rápida (para no bloquear ambos botones a la vez)
+  const [exportando, setExportando] = useState(null); // 'pdf' | 'excel' | null
+
+  // Estado de alertas de stock crítico (widget del dashboard)
+  const [alertasData,     setAlertasData]     = useState(null);
+  const [alertasCargando, setAlertasCargando] = useState(true);
+  const [alertasError,    setAlertasError]    = useState(null);
 
   // ── Fetch al backend ─────────────────────────────────────────────────────
   const fetchDashboard = useCallback(async (mes) => {
@@ -224,10 +246,10 @@ export default function ReportesView() {
 
     try {
       const res = await api.get(`/reportes/dashboard?mes=${mes}`);
-      
+
       // Axios ya te devuelve el JSON parseado automáticamente en res.data
       setDashboardData(res.data);
-      
+
     } catch (err) {
       console.error('Dashboard fetch error:', err);
       // Extraemos el mensaje de error de Axios de forma segura
@@ -238,22 +260,80 @@ export default function ReportesView() {
     }
   }, []);
 
+  // ── Fetch de alertas críticas (histórico, independiente del mes elegido) ──
+  const fetchAlertas = useCallback(async () => {
+    setAlertasCargando(true);
+    setAlertasError(null);
+    try {
+      const res = await api.get('/inventario/alertas-criticas');
+      setAlertasData(res.data || []);
+    } catch (err) {
+      setAlertasError(err.response?.data?.message || err.message || 'No se pudieron cargar las alertas.');
+    } finally {
+      setAlertasCargando(false);
+    }
+  }, []);
+
   // Re-fetch cada vez que cambia el mes
   useEffect(() => {
     fetchDashboard(mesSeleccionado);
   }, [mesSeleccionado, fetchDashboard]);
 
+  // Las alertas críticas son históricas (no dependen del mes), se cargan una vez
+  useEffect(() => {
+    fetchAlertas();
+  }, [fetchAlertas]);
+
   // ── Derivar datasets solo cuando hay datos ────────────────────────────────
   const graficas = dashboardData ? transformarDatos(dashboardData) : null;
   const kpis     = dashboardData?.kpis ?? null;
 
-  // ── Exportación (placeholder — se implementará luego) ─────────────────────
-  const handleQuickExport = (formato) => {
-    alert(`Exportación en ${formato.toUpperCase()} — próximamente`);
-  };
-
   // ── Label del mes activo ──────────────────────────────────────────────────
   const labelMes = MESES.find(m => m.value === mesSeleccionado)?.label ?? mesSeleccionado;
+
+  // ── Alertas recientes (top 5 para el widget del dashboard) ────────────────
+  const alertasRecientes = (alertasData || []).slice(0, 5);
+
+  // ── Exportación rápida del dashboard global del mes ────────────────────────
+  const handleQuickExport = async (formato) => {
+    if (!dashboardData || exportando) return;
+    setExportando(formato);
+    try {
+      if (formato === 'excel') {
+        await generarExcel({
+          scope: 'global',
+          labelMes,
+          kpis,
+          data: dashboardData,
+          labelScope: 'Reporte Global Mensual',
+        });
+      } else {
+        await generarPDF({
+          scope: 'global',
+          labelMes,
+          kpis,
+          data: dashboardData,
+          labelScope: 'Reporte Global Mensual',
+          incluir: { kpis: true, graficaTendencia: true, movimientos: true, alertas: false },
+          lineChartData:   graficas.lineChartData,
+          doughnutData:    graficas.doughnutData,
+          topInsumosData:  graficas.topInsumosData,
+          deptosData:      graficas.deptosData,
+          alertas: [],
+        });
+      }
+    } catch (err) {
+      console.error('Error al exportar dashboard:', err);
+    } finally {
+      setExportando(null);
+    }
+  };
+
+  // ── Abrir el modal de reporte personalizado con una configuración dada ────
+  const abrirModal = (config = {}) => {
+    setModalConfig({ scope: 'global', subjectId: null, incluirAlertas: false, ...config });
+    setIsReportModalOpen(true);
+  };
 
   // ════════════════════════════════════════════════════════════════════════
   return (
@@ -285,31 +365,56 @@ export default function ReportesView() {
 
             <button
               onClick={() => handleQuickExport('pdf')}
-              disabled
-              className="p-1.5 rounded-lg text-text-secondary opacity-40 cursor-not-allowed flex items-center justify-center"
-              title="Exportar PDF (próximamente)"
+              disabled={!dashboardData || cargando || !!exportando}
+              className="p-1.5 rounded-lg text-text-secondary hover:text-accent hover:bg-accent/10 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent flex items-center justify-center transition-colors"
+              title="Exportar PDF del mes"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 9h4v4H9z" />
-              </svg>
+              {exportando === 'pdf' ? (
+                <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 9h4v4H9z" />
+                </svg>
+              )}
             </button>
 
             <button
               onClick={() => handleQuickExport('excel')}
-              disabled
-              className="p-1.5 rounded-lg text-text-secondary opacity-40 cursor-not-allowed flex items-center justify-center mr-1"
-              title="Exportar Excel (próximamente)"
+              disabled={!dashboardData || cargando || !!exportando}
+              className="p-1.5 rounded-lg text-text-secondary hover:text-accent hover:bg-accent/10 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent flex items-center justify-center mr-1 transition-colors"
+              title="Exportar Excel del mes"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
+              {exportando === 'excel' ? (
+                <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              )}
             </button>
           </div>
 
+          {/* Atajo: Reporte por Edificio */}
+          <button
+            onClick={() => abrirModal({ scope: 'inventario' })}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-[1.5px] border-border text-text-secondary font-heading font-bold text-sm transition-all hover:border-accent hover:text-accent shadow-sm"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V5a2 2 0 012-2h10a2 2 0 012 2v16M9 21V9h6v12M9 6h.01M9 12h.01M15 6h.01M15 12h.01" />
+            </svg>
+            Por Edificio
+          </button>
+
           {/* Botón Reporte Personalizado */}
           <button
-            onClick={() => setIsReportModalOpen(true)}
+            onClick={() => abrirModal({ scope: 'global' })}
             className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border-2 border-accent text-accent font-heading font-bold text-sm transition-all hover:bg-[var(--accent-glow)] shadow-sm"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -370,8 +475,12 @@ export default function ReportesView() {
               <p className="text-xs text-text-muted mt-2">Unidades abastecidas en {labelMes}</p>
             </div>
 
-            {/* Insumos Críticos */}
-            <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
+            {/* Insumos Críticos — clicable: abre el modal con las alertas ya activadas */}
+            <button
+              type="button"
+              onClick={() => abrirModal({ scope: 'global', incluirAlertas: true })}
+              className="text-left bg-card border border-border rounded-xl p-5 shadow-sm transition-colors hover:border-red-500/40 group"
+            >
               <div className="flex items-center justify-between mb-2">
                 <p className="text-[0.7rem] font-heading font-bold uppercase tracking-wider text-text-muted">Insumos Críticos</p>
                 <span className="w-8 h-8 rounded-full bg-red-500/10 flex items-center justify-center text-red-500">
@@ -383,10 +492,10 @@ export default function ReportesView() {
               <p className={`text-3xl font-heading font-black ${kpis?.criticos > 0 ? 'text-red-500' : 'text-text-primary'}`}>
                 {kpis?.criticos ?? 0}
               </p>
-              <p className="text-xs text-text-muted mt-2">
-                {kpis?.criticos > 0 ? 'Requieren abastecimiento urgente' : 'Sin stock crítico'}
+              <p className="text-xs text-text-muted mt-2 group-hover:text-red-400 transition-colors">
+                {kpis?.criticos > 0 ? 'Ver alertas de stock crítico →' : 'Sin stock crítico'}
               </p>
-            </div>
+            </button>
 
             {/* Usuarios Activos */}
             <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
@@ -450,7 +559,7 @@ export default function ReportesView() {
       </div>
 
       {/* ── GRÁFICAS BLOQUE 2: Top Insumos + Departamentos ───────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-6 min-h-[320px]">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 min-h-[320px]">
         {cargando ? (
           <>
             <ChartSkeleton />
@@ -495,11 +604,90 @@ export default function ReportesView() {
         )}
       </div>
 
+      {/* ── WIDGET: Alertas de Stock Crítico (histórico, independiente del mes) ── */}
+      <div className="pb-6">
+        {alertasCargando ? (
+          <AlertasSkeleton />
+        ) : (
+          <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <div className="flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 shrink-0">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </span>
+                <div>
+                  <h3 className="font-heading font-bold text-sm text-text-primary">Alertas de Stock Crítico</h3>
+                  <p className="text-xs text-text-muted">Histórico de desabasto por edificio</p>
+                </div>
+              </div>
+              <button
+                onClick={() => abrirModal({ scope: 'global', incluirAlertas: true })}
+                className="text-xs font-bold text-accent hover:underline shrink-0"
+              >
+                Ver reporte completo →
+              </button>
+            </div>
+
+            {alertasError && (
+              <div className="px-5 py-3">
+                <AlertError mensaje={alertasError} onRetry={fetchAlertas} />
+              </div>
+            )}
+
+            {!alertasError && alertasRecientes.length === 0 && (
+              <p className="px-5 py-4 text-sm text-text-muted italic">Sin registros de desabasto en el histórico. Todo el inventario está en niveles saludables.</p>
+            )}
+
+            {!alertasError && alertasRecientes.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-inputBg">
+                    <tr>
+                      {['Fecha', 'Producto', 'Edificio', 'Stock al momento'].map(h => (
+                        <th key={h} className="px-5 py-2 text-left text-[0.65rem] font-heading font-bold uppercase tracking-wide text-text-muted">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {alertasRecientes.map((a, i) => (
+                      <tr key={a.id ?? i} className="border-t border-border/50 hover:bg-inputBg/50">
+                        <td className="px-5 py-2.5 text-text-secondary whitespace-nowrap">
+                          {a.fecha ? new Date(a.fecha).toLocaleDateString('es-MX') : '—'}
+                        </td>
+                        <td className="px-5 py-2.5 text-text-primary font-medium">
+                          {a.producto?.nombre || `Producto #${a.producto_id ?? '—'}`}
+                          {a.producto?.unidad_medida && <span className="text-text-muted text-xs ml-1">({a.producto.unidad_medida})</span>}
+                        </td>
+                        <td className="px-5 py-2.5 text-text-secondary">{a.edificio || '—'}</td>
+                        <td className="px-5 py-2.5 font-semibold text-red-400">
+                          {a.stock_actual ?? a.stock_al_momento ?? a.cantidad ?? '—'}
+                          {a.stock_minimo != null ? ` / min. ${a.stock_minimo}` : ''}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {alertasData && alertasData.length > alertasRecientes.length && (
+              <div className="px-5 py-2.5 border-t border-border text-xs text-text-muted">
+                Mostrando {alertasRecientes.length} de {alertasData.length} registros · abre el reporte completo para ver todo el histórico.
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* ── MODAL REPORTE PERSONALIZADO ──────────────────────────────────── */}
       <ReportModal
         isOpen={isReportModalOpen}
         onClose={() => setIsReportModalOpen(false)}
-        initialScope="global"
+        initialScope={modalConfig.scope}
+        initialSubjectId={modalConfig.subjectId}
+        initialIncluirAlertas={modalConfig.incluirAlertas}
       />
     </div>
   );

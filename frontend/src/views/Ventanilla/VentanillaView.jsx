@@ -137,7 +137,7 @@ export default function VentanillaView() {
         embalajeId: item.embalajeId
       }));
 
-      // 🚀 SE AÑADE EL EDIFICIO AL PAYLOAD
+      //  SE AÑADE EL EDIFICIO AL PAYLOAD
       const payload = {
         tipo: tipoMovimiento,
         edificio: edificio, 
@@ -180,14 +180,14 @@ export default function VentanillaView() {
         </div>
         
         <div className="flex flex-col sm:flex-row gap-3">
-          {/* 🚀 NUEVO: Selector de Edificio */}
+          {/*  NUEVO: Selector de Edificio */}
           <select
             value={edificio}
             onChange={(e) => setEdificio(e.target.value)}
             className="bg-inputBg border border-border rounded-lg px-3 py-1.5 text-sm font-semibold text-text-primary outline-none focus:border-accent"
           >
             {EDIFICIOS_DISPONIBLES.map(edif => (
-              <option key={edif} value={edif}>🏢 Sede: {edif}</option>
+              <option key={edif} value={edif}> Sede: {edif}</option>
             ))}
           </select>
 
@@ -333,7 +333,7 @@ export default function VentanillaView() {
               ) : filteredInsumos.length > 0 ? (
                 filteredInsumos.map(insumo => {
                   
-                  // 🚀 CÁLCULO DE STOCK DINÁMICO POR EDIFICIO
+                  //  CÁLCULO DE STOCK DINÁMICO POR EDIFICIO
                   const existenciaEdificio = insumo.existencias?.find(e => e.edificio === edificio);
                   const stockActualNum = existenciaEdificio ? Number(existenciaEdificio.stock_actual) : 0;
                   const stockMinimoNum = existenciaEdificio ? Number(existenciaEdificio.stock_minimo) : 5;
