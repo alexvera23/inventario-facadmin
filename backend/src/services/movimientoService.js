@@ -145,7 +145,7 @@ class MovimientoService {
         });
     }
     //Editar Transaccion con Compensación 
-    async actualizarTransaccion(id, nuevaCantidad, observaciones, solicitanteId, adminId) {
+    async actualizarTransaccion(id, nuevaCantidad, nuevoTipo, observaciones, solicitanteId, adminId) {
         // Ejecutamos todo dentro de una transacción interactiva de Prisma
         return await prisma.$transaction(async (tx) => {
             
@@ -157,54 +157,73 @@ class MovimientoService {
 
             if (!movViejo) throw new Error('NOT_FOUND');
 
-            // 2. Calcular la diferencia matemática
-            // Parseamos a Float porque Decimal en Prisma viene como objeto
             const cantidadVieja = parseFloat(movViejo.cantidad);
             const cantidadNueva = parseFloat(nuevaCantidad);
             
-            const diferencia = cantidadNueva - cantidadVieja;
-            
-            // Si es SALIDA, el ajuste en stock es inverso (si resto menos, el stock sube)
-            let ajusteStock = movViejo.tipo === 'ENTRADA' ? diferencia : -diferencia;
+            // Si no envían un nuevo tipo, mantenemos el que ya tenía
+            const tipoFinal = nuevoTipo ? nuevoTipo.toUpperCase() : movViejo.tipo;
 
-            // 3. Validar que el ajuste no deje el stock en negativo
-            const nuevoStock = parseFloat(movViejo.producto.stock_actual) + ajusteStock;
+            // 2. Calcular la diferencia matemática (Reversión + Nueva Aplicación)
+            let ajusteStock = 0;
+            
+            // Paso A: Deshacer el impacto del movimiento original
+            // Si era ENTRADA, al deshacerlo restamos. Si era SALIDA, sumamos.
+            ajusteStock += movViejo.tipo === 'ENTRADA' ? -cantidadVieja : cantidadVieja;
+            
+            // Paso B: Aplicar el nuevo impacto
+            // Si ahora es ENTRADA, sumamos. Si es SALIDA, restamos.
+            ajusteStock += tipoFinal === 'ENTRADA' ? cantidadNueva : -cantidadNueva;
+
+            // 3. Buscar el inventario específico en la sede donde ocurrió el movimiento
+            const stockSede = await tx.stockEdificio.findFirst({
+                where: {
+                    producto_id: movViejo.producto_id,
+                    edificio: movViejo.edificio
+                }
+            });
+
+            if (!stockSede) throw new Error('STOCK_RECORD_NOT_FOUND');
+
+            // 4. Validar que el ajuste no deje el stock del edificio en negativo
+            const nuevoStock = parseFloat(stockSede.stock_actual) + ajusteStock;
             if (nuevoStock < 0) {
                 throw new Error('STOCK_INSUFICIENTE');
             }
 
-            // 4. Actualizar el registro del movimiento
+            // 5. Actualizar el registro del movimiento
             const movActualizado = await tx.movimiento.update({
                 where: { id: movViejo.id },
                 data: {
                     cantidad: cantidadNueva,
+                    tipo: tipoFinal,
                     observaciones: observaciones !== undefined ? observaciones : movViejo.observaciones,
                     solicitante_id: solicitanteId !== undefined ? solicitanteId : movViejo.solicitante_id
                 }
             });
 
-            // 5. Actualizar el stock del producto
+            // 6. Actualizar el stock del edificio correspondiente
             if (ajusteStock !== 0) {
-                await tx.producto.update({
-                    where: { id: movViejo.producto_id },
+                await tx.stockEdificio.update({
+                    where: { id: stockSede.id },
                     data: {
                         stock_actual: {
-                            increment: ajusteStock // Prisma se encarga de la suma o resta segura
+                            increment: ajusteStock 
                         }
                     }
                 });
             }
 
-            // 6.  Registrar en la BITÁCORA DE AUDITORÍA
-            // Usamos el auditoriaService inyectando nuestro objeto 'tx' si fuera posible, 
-            // pero para simplificar, lo registramos directo en la misma transacción:
+            // 7. Registrar en la BITÁCORA DE AUDITORÍA
+            // Documentamos si cambió el tipo, la cantidad o ambos.
+            const detalleTipo = movViejo.tipo !== tipoFinal ? ` Cambió de ${movViejo.tipo} a ${tipoFinal}.` : '';
+            
             await tx.auditoria.create({
                 data: {
                     usuario_id: adminId,
                     accion: 'ACTUALIZAR',
                     entidad: 'MOVIMIENTO',
                     entidad_id: movViejo.id,
-                    detalles: `Modificó transacción #${movViejo.id} (${movViejo.tipo} de ${movViejo.producto.nombre}). Cantidad: ${cantidadVieja} -> ${cantidadNueva}. Ajuste en stock: ${ajusteStock > 0 ? '+'+ajusteStock : ajusteStock}.`
+                    detalles: `Modificó transacción #${movViejo.id} (${movViejo.producto.nombre} en ${movViejo.edificio}).${detalleTipo} Cantidad: ${cantidadVieja} -> ${cantidadNueva}. Ajuste neto en sede: ${ajusteStock > 0 ? '+'+ajusteStock : ajusteStock}.`
                 }
             });
 

@@ -76,20 +76,28 @@ class MovimientoController {
     }
 
     async actualizarMovimientos(req, res){
-            try {
+        try {
             const { id } = req.params;
-            const { cantidad, observaciones, solicitante_id } = req.body;
             
-            //  Extraemos el ID del Admin desde el Token que pasó por el middleware
+            // Extraemos también el 'tipo' del body
+            const { cantidad, tipo, observaciones, solicitante_id } = req.body;
+            
+            // Extraemos el ID del Admin desde el Token que pasó por el middleware
             const adminId = req.user.id; 
 
             if (cantidad === undefined || cantidad === null) {
                 return res.status(400).json({ message: 'La nueva cantidad es obligatoria.' });
             }
 
+            // Validación de seguridad para el tipo
+            if (tipo && !['ENTRADA', 'SALIDA'].includes(tipo.toUpperCase())) {
+                return res.status(400).json({ message: 'El tipo de movimiento solo puede ser ENTRADA o SALIDA.' });
+            }
+
             const resultado = await movimientoService.actualizarTransaccion(
                 id, 
-                cantidad, 
+                cantidad,
+                tipo, // Pasamos el nuevo parámetro al servicio
                 observaciones, 
                 solicitante_id, 
                 adminId
@@ -104,8 +112,11 @@ class MovimientoController {
             if (error.message === 'NOT_FOUND') {
                 return res.status(404).json({ message: 'La transacción original no existe.' });
             }
+            if (error.message === 'STOCK_RECORD_NOT_FOUND') {
+                return res.status(404).json({ message: 'No se encontró el registro de stock para la sede de este movimiento.' });
+            }
             if (error.message === 'STOCK_INSUFICIENTE') {
-                return res.status(400).json({ message: 'El ajuste dejaría el stock en números negativos. Verifica la cantidad.' });
+                return res.status(400).json({ message: 'El ajuste dejaría el stock de la sede en números negativos. Verifica la cantidad o el tipo de movimiento.' });
             }
             console.error('[MovimientoController Error]:', error);
             return res.status(500).json({ message: 'Error interno al actualizar la transacción.' });
