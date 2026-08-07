@@ -104,10 +104,10 @@ function Spinner({ className = 'w-4 h-4' }) {
 // ─── Tarjeta KPI ───────────────────────────────────────────────────────────
 function KpiCard({ label, value, colorClass = 'text-text-primary', sub }) {
   return (
-    <div className="bg-inputBg border border-border rounded-xl p-4 flex flex-col gap-1">
-      <p className="text-[0.65rem] font-heading font-bold uppercase tracking-wider text-text-muted">{label}</p>
-      <p className={`text-2xl font-heading font-black ${colorClass}`}>{value ?? '—'}</p>
-      {sub && <p className="text-[0.7rem] text-text-muted">{sub}</p>}
+    <div className="bg-inputBg border border-border rounded-xl p-3 sm:p-4 flex flex-col gap-1 min-w-0">
+      <p className="text-[0.62rem] sm:text-[0.65rem] font-heading font-bold uppercase tracking-wider text-text-muted truncate">{label}</p>
+      <p className={`text-xl sm:text-2xl font-heading font-black ${colorClass} truncate`}>{value ?? '—'}</p>
+      {sub && <p className="text-[0.68rem] sm:text-[0.7rem] text-text-muted truncate">{sub}</p>}
     </div>
   );
 }
@@ -841,6 +841,9 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
   const [edificioInput, setEdificioInput] = useState('');
   const buscarEdificio = () => setSubjectId(edificioInput.trim() || null);
 
+  // ── Panel de configuración en móvil: oculto por defecto, se abre con el botón hamburguesa ─
+  const [panelAbierto, setPanelAbierto] = useState(false);
+
   // ── Alertas de stock crítico (histórico global, independiente del alcance) ─
   const [alertasData,     setAlertasData]     = useState(null);
   const [alertasCargando, setAlertasCargando] = useState(false);
@@ -878,6 +881,7 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
       setAlertasData(null);
       setAlertasError(null);
       setIncluir(prev => ({ ...prev, alertas: initialIncluirAlertas }));
+      setPanelAbierto(false);
     }
   }, [isOpen, initialScope, initialSubjectId, initialIncluirAlertas]);
 
@@ -1121,25 +1125,34 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-3"
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center sm:p-3"
         onClick={onClose}
       >
         <div
-          className="bg-app rounded-2xl w-full max-w-[860px] shadow-2xl flex flex-col max-h-[92vh] overflow-hidden"
+          className="bg-app w-full h-full sm:h-auto sm:max-w-[860px] sm:rounded-2xl shadow-2xl flex flex-col max-h-full sm:max-h-[92vh] overflow-hidden"
           onClick={e => e.stopPropagation()}
           style={{ minHeight: '560px' }}
         >
           {/* ── HEADER ─────────────────────────────────────────────────── */}
-          <div className="p-4 border-b border-border flex items-start justify-between gap-3 bg-card shrink-0">
-            <div className="flex items-center gap-2.5">
+          <div className="p-3 sm:p-4 border-b border-border flex items-start justify-between gap-3 bg-card shrink-0">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <button
+                onClick={() => setPanelAbierto(true)}
+                className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-border text-text-secondary transition-colors shrink-0"
+                title="Configuración del reporte"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
+                </svg>
+              </button>
               <div className="w-8 h-8 rounded-lg bg-[var(--accent-glow)] flex items-center justify-center border border-[var(--accent-glow-strong)] shrink-0">
                 <svg className="w-4 h-4 text-accent" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
                 </svg>
               </div>
-              <div>
-                <h3 className="font-heading font-extrabold text-base text-text-primary leading-tight">Reporte Personalizado</h3>
-                <p className="text-[0.72rem] text-text-muted font-sans">Configura, previsualiza y exporta tus reportes</p>
+              <div className="min-w-0">
+                <h3 className="font-heading font-extrabold text-base text-text-primary leading-tight truncate">Reporte Personalizado</h3>
+                <p className="text-[0.72rem] text-text-muted font-sans truncate hidden sm:block">Configura, previsualiza y exporta tus reportes</p>
               </div>
             </div>
             <button onClick={onClose} className="p-1.5 rounded-full hover:bg-border text-text-secondary transition-colors shrink-0">
@@ -1150,14 +1163,36 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
           </div>
 
           {/* ── BODY: panel izquierdo + preview derecho ────────────────── */}
-          <div className="flex flex-1 overflow-hidden">
+          <div className="relative flex flex-col md:flex-row flex-1 min-h-0 overflow-hidden">
 
-            {/* Panel de configuración */}
-            <div className="w-[260px] shrink-0 flex flex-col gap-5 p-4 border-r border-border overflow-y-auto bg-card/50">
+            {/* Panel de configuración — en móvil es un overlay oculto por defecto,
+                se abre con el botón de hamburguesa del header */}
+            <div className={`
+              ${panelAbierto ? 'flex' : 'hidden'} md:flex
+              absolute md:static inset-0 z-20
+              w-full md:w-[260px] shrink-0 flex-col gap-5 p-4
+              border-b md:border-b-0 md:border-r border-border
+              overflow-y-auto bg-app md:bg-card/50
+              max-h-full md:max-h-none
+            `}>
+              {/* Encabezado del panel, solo visible en móvil */}
+              <div className="flex items-center justify-between md:hidden -mt-1 -mx-1 pb-1 border-b border-border">
+                <p className="font-heading font-bold text-sm text-text-primary px-1">Configuración del reporte</p>
+                <button
+                  onClick={() => setPanelAbierto(false)}
+                  className="p-1.5 rounded-full hover:bg-border text-text-secondary transition-colors shrink-0"
+                  title="Cerrar configuración"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                  </svg>
+                </button>
+              </div>
+
 
               {/* Alcance */}
               <Section title="Alcance">
-                <div className="flex flex-col gap-1.5">
+                <div className="flex md:flex-col gap-1.5 overflow-x-auto md:overflow-visible -mx-1 px-1 md:mx-0 md:px-0 pb-1 md:pb-0">
                   {[
                     { key: 'global',     label: 'Global',       icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
                     { key: 'insumo',     label: 'Por Insumo',   icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 10V7' },
@@ -1167,7 +1202,7 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                     <button
                       key={key}
                       onClick={() => { setScope(key); setSubjectId(null); }}
-                      className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[0.8rem] font-semibold transition-all border text-left ${
+                      className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[0.8rem] font-semibold transition-all border text-left shrink-0 whitespace-nowrap ${
                         scope === key
                           ? 'bg-accent/10 border-accent text-accent'
                           : 'bg-inputBg border-border text-text-secondary hover:border-accent/40'
@@ -1300,10 +1335,22 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                   ))}
                 </div>
               </Section>
+
+              {/* CTA solo en móvil: cierra el panel y muestra la previsualización */}
+              <button
+                onClick={() => setPanelAbierto(false)}
+                className="md:hidden mt-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-accent text-white rounded-lg font-heading font-bold text-sm shadow-sm hover:bg-accent/90 transition-colors shrink-0"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                </svg>
+                Ver previsualización
+              </button>
             </div>
 
             {/* Panel de Preview */}
-            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
+            <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 flex flex-col gap-5">
 
               {cargando && (
                 <div className="flex-1 flex flex-col items-center justify-center gap-3 text-text-muted">
@@ -1499,7 +1546,7 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                   {previewData.tipo === 'usuario' && Array.isArray(usuarioData) && (
                     <>
                       {incluir.kpis && (
-                        <div className="grid grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                           <KpiCard label="Total Movimientos" value={usuarioData.length} sub="en el período" />
                           <KpiCard label="Entradas"          value={usuarioData.filter(m => m.tipo === 'ENTRADA').length} colorClass="text-emerald-400" sub="procesadas" />
                           <KpiCard label="Salidas / Pedidos" value={usuarioData.filter(m => m.tipo === 'SALIDA').length}  sub="solicitadas" />
@@ -1570,7 +1617,7 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                       ) : (
                         <>
                           {incluir.kpis && (
-                            <div className="grid grid-cols-3 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                               <KpiCard label="Productos" value={inventarioKpis?.totalProductos} sub="registrados en el edificio" />
                               <KpiCard label="Insumos Críticos" value={inventarioKpis?.criticos} colorClass={inventarioKpis?.criticos > 0 ? 'text-red-400' : 'text-text-primary'} sub="bajo stock mínimo" />
                               <KpiCard label="Unidades en Stock" value={inventarioKpis?.totalUnidades?.toLocaleString('es-MX')} sub="suma total" />
@@ -1681,14 +1728,14 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
           </div>
 
           {/* ── FOOTER ─────────────────────────────────────────────────── */}
-          <div className="p-3.5 border-t border-border bg-card flex items-center justify-between gap-2 shrink-0 flex-wrap sm:flex-nowrap">
-            <button onClick={onClose} className="px-4 py-2 text-sm font-heading font-semibold text-text-secondary hover:bg-border rounded-lg transition-colors">
+          <div className="p-3 sm:p-3.5 border-t border-border bg-card flex items-center justify-between gap-2 shrink-0 flex-wrap">
+            <button onClick={onClose} className="px-3 sm:px-4 py-2 text-sm font-heading font-semibold text-text-secondary hover:bg-border rounded-lg transition-colors">
               Cancelar
             </button>
 
-            <div className="flex items-center gap-2 ml-auto">
+            <div className="flex items-center gap-2 ml-auto flex-wrap justify-end">
               {!puedeExportar && !cargando && (
-                <p className="text-[0.72rem] text-text-muted italic mr-2">
+                <p className="text-[0.72rem] text-text-muted italic mr-2 hidden sm:block">
                   {necesitaSujeto && !subjectId
                     ? (scope === 'inventario' ? 'Ingresa un edificio' : `Selecciona un ${scope}`)
                     : 'Sin datos disponibles'}
@@ -1698,7 +1745,7 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
               <button
                 onClick={() => handleExportar('excel')}
                 disabled={!puedeExportar || generando !== null}
-                className="flex items-center justify-center gap-2 px-4 py-2 bg-inputBg border border-border text-text-primary hover:border-accent rounded-lg font-heading font-semibold text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-inputBg border border-border text-text-primary hover:border-accent rounded-lg font-heading font-semibold text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {generando === 'excel'
                   ? <Spinner className="w-4 h-4" />
@@ -1710,7 +1757,7 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
               <button
                 onClick={() => handleExportar('pdf')}
                 disabled={!puedeExportar || generando !== null}
-                className="flex items-center justify-center gap-2 px-4 py-2 bg-accent text-white hover:bg-accent/90 rounded-lg font-heading font-semibold text-sm transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-accent text-white hover:bg-accent/90 rounded-lg font-heading font-semibold text-sm transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {generando === 'pdf'
                   ? <Spinner className="w-4 h-4" />
