@@ -104,10 +104,10 @@ function Spinner({ className = 'w-4 h-4' }) {
 // ─── Tarjeta KPI ───────────────────────────────────────────────────────────
 function KpiCard({ label, value, colorClass = 'text-text-primary', sub }) {
   return (
-    <div className="bg-inputBg border border-border rounded-xl p-4 flex flex-col gap-1">
-      <p className="text-[0.65rem] font-heading font-bold uppercase tracking-wider text-text-muted">{label}</p>
-      <p className={`text-2xl font-heading font-black ${colorClass}`}>{value ?? '—'}</p>
-      {sub && <p className="text-[0.7rem] text-text-muted">{sub}</p>}
+    <div className="bg-inputBg border border-border rounded-xl p-3 sm:p-4 flex flex-col gap-1 min-w-0">
+      <p className="text-[0.62rem] sm:text-[0.65rem] font-heading font-bold uppercase tracking-wider text-text-muted truncate">{label}</p>
+      <p className={`text-xl sm:text-2xl font-heading font-black ${colorClass} truncate`}>{value ?? '—'}</p>
+      {sub && <p className="text-[0.68rem] sm:text-[0.7rem] text-text-muted truncate">{sub}</p>}
     </div>
   );
 }
@@ -282,7 +282,7 @@ function deepMerge(base, override) {
  * Genera el Excel (.xlsx) a partir de los datos del reporte.
  * Usa la librería xlsx (SheetJS).
  */
-async function generarExcel({ scope, labelMes, kpis, data, labelScope }) {
+export async function generarExcel({ scope, labelMes, kpis, data, labelScope, alertas = [], incluirAlertas = false }) {
   const XLSX = await import('xlsx');
 
   const wb = XLSX.utils.book_new();
@@ -312,6 +312,11 @@ async function generarExcel({ scope, labelMes, kpis, data, labelScope }) {
     const salidas  = (data || []).filter(m => m.tipo === 'SALIDA').length;
     kpiRows.push(['Entradas procesadas', entradas, '']);
     kpiRows.push(['Salidas procesadas', salidas, '']);
+  }
+  if (scope === 'inventario') {
+    kpiRows.push(['Productos Registrados', kpis?.totalProductos ?? 0, 'En el edificio']);
+    kpiRows.push(['Insumos Críticos', kpis?.criticos ?? 0, 'Bajo stock mínimo']);
+    kpiRows.push(['Unidades en Stock', kpis?.totalUnidades ?? 0, 'Suma total del edificio']);
   }
 
   const wsKpis = XLSX.utils.aoa_to_sheet(kpiRows);
@@ -381,6 +386,42 @@ async function generarExcel({ scope, labelMes, kpis, data, labelScope }) {
     XLSX.utils.book_append_sheet(wb, ws, 'Actividad');
   }
 
+  if (scope === 'inventario' && Array.isArray(data)) {
+    const rows = [['Producto', 'Categoría', 'Unidad', 'Stock Actual', 'Stock Mínimo', 'Estado']];
+    data.forEach(it => {
+      const critico = Number(it.stock_actual) <= Number(it.stock_minimo);
+      rows.push([
+        it.producto?.nombre || `#${it.producto_id}`,
+        it.producto?.categoria || '',
+        it.producto?.unidad_medida || '',
+        it.stock_actual,
+        it.stock_minimo,
+        critico ? 'CRÍTICO' : 'OK'
+      ]);
+    });
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 28 }, { wch: 18 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 10 }];
+    XLSX.utils.book_append_sheet(wb, ws, 'Inventario');
+  }
+
+  // ── Hoja adicional: Alertas de stock crítico (histórico, independiente del alcance) ──
+  if (incluirAlertas && alertas.length > 0) {
+    const rows = [['Fecha', 'Producto', 'Unidad', 'Edificio', 'Stock al Momento', 'Stock Mínimo']];
+    alertas.forEach(a => {
+      rows.push([
+        a.fecha ? new Date(a.fecha).toLocaleDateString('es-MX') : '',
+        a.producto,
+        a.unidad,
+        a.edificio,
+        a.stockAlMomento ?? '',
+        a.stockMinimo ?? ''
+      ]);
+    });
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 14 }, { wch: 28 }, { wch: 10 }, { wch: 18 }, { wch: 16 }, { wch: 14 }];
+    XLSX.utils.book_append_sheet(wb, ws, 'Alertas Críticas');
+  }
+
   const filename = `reporte_facdamin_${scope}_${labelMes.replace(' ', '_')}.xlsx`;
   XLSX.writeFile(wb, filename);
   toastService.success('Reporte Excel generado exitosamente');
@@ -390,10 +431,11 @@ async function generarExcel({ scope, labelMes, kpis, data, labelScope }) {
  * Genera el PDF usando jsPDF + gráficas renderizadas en canvas offscreen.
  * Cada gráfica se fabrica en memoria a 1600×700px, se exporta y se destruye.
  */
-async function generarPDF({ scope, labelMes, kpis, data, labelScope, incluir,
+export async function generarPDF({ scope, labelMes, kpis, data, labelScope, incluir,
                              /* chartRefs ya no se usa, se mantiene por compatibilidad */
                              lineChartData, doughnutData, topInsumosData, deptosData,
-                             insumoChartData, usuarioChartData }) {
+                             insumoChartData, usuarioChartData, inventarioChartData,
+                             alertas = [] }) {
   const { default: jsPDF } = await import('jspdf');
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -690,6 +732,64 @@ async function generarPDF({ scope, labelMes, kpis, data, labelScope, incluir,
     }
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // SCOPE: INVENTARIO POR EDIFICIO
+  // ══════════════════════════════════════════════════════════════════════════
+  if (scope === 'inventario' && Array.isArray(data)) {
+    if (incluir.kpis) {
+      drawSectionTitle('Indicadores del Edificio');
+      drawKpiRow([
+        { label: 'Productos',         value: kpis?.totalProductos ?? data.length, sub: 'registrados' },
+        { label: 'Insumos Críticos',  value: kpis?.criticos ?? 0, sub: 'bajo stock mínimo', danger: (kpis?.criticos ?? 0) > 0 },
+        { label: 'Unidades en Stock', value: (kpis?.totalUnidades ?? 0).toLocaleString?.('es-MX') ?? kpis?.totalUnidades, sub: 'suma total' },
+      ]);
+    }
+
+    if (incluir.graficaTendencia && inventarioChartData?.labels?.length) {
+      drawSectionTitle('Stock Actual vs. Mínimo (Top 10)');
+      const img = await renderChartOffscreen('bar', inventarioChartData);
+      addChartPNG(img, 62);
+    }
+
+    if (incluir.movimientos && data.length) {
+      drawSectionTitle('Desglose de Inventario');
+      const rows = data.map(it => {
+        const critico = Number(it.stock_actual) <= Number(it.stock_minimo);
+        return [
+          it.producto?.nombre || `#${it.producto_id}`,
+          it.producto?.categoria || '—',
+          it.stock_actual,
+          it.stock_minimo,
+          critico ? 'CRÍTICO' : 'OK'
+        ];
+      });
+      drawTable(
+        ['Producto', 'Categoría', 'Stock Actual', 'Stock Mín.', 'Estado'],
+        rows,
+        [58, 40, 30, 26, 24]
+      );
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ALERTAS DE STOCK CRÍTICO (histórico global, independiente del alcance)
+  // ══════════════════════════════════════════════════════════════════════════
+  if (incluir.alertas && alertas.length) {
+    drawSectionTitle('Alertas de Stock Crítico · Histórico');
+    const rows = alertas.map(a => [
+      a.fecha ? new Date(a.fecha).toLocaleDateString('es-MX') : '—',
+      a.producto,
+      a.edificio,
+      a.stockAlMomento ?? '—',
+      a.stockMinimo ?? '—'
+    ]);
+    drawTable(
+      ['Fecha', 'Producto', 'Edificio', 'Stock', 'Mínimo'],
+      rows,
+      [26, 56, 40, 26, 30]
+    );
+  }
+
   // ── PIE DE PÁGINA ──────────────────────────────────────────────────────
   const totalPages = doc.internal.getNumberOfPages();
   for (let p = 1; p <= totalPages; p++) {
@@ -710,7 +810,7 @@ async function generarPDF({ scope, labelMes, kpis, data, labelScope, incluir,
 // ══════════════════════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
 // ══════════════════════════════════════════════════════════════════════════════
-export default function ReportModal({ isOpen, onClose, initialScope = 'global', initialSubjectId = null }) {
+export default function ReportModal({ isOpen, onClose, initialScope = 'global', initialSubjectId = null, initialIncluirAlertas = false }) {
   // ── Configuración del reporte ──────────────────────────────────────────
   const [scope,    setScope]    = useState(initialScope);
   const [subjectId, setSubjectId] = useState(initialSubjectId);
@@ -724,7 +824,7 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
     movimientos:      true,
     graficaTendencia: true,
     kpis:             true,
-    alertas:          false,
+    alertas:          initialIncluirAlertas,
   });
 
   // ── Catálogos para el selector dinámico ───────────────────────────────
@@ -736,6 +836,31 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
   const [cargando,    setCargando]    = useState(false);
   const [error,       setError]       = useState(null);
   const [generando,   setGenerando]   = useState(null);
+
+  // ── Alcance "Por Edificio": texto libre para buscar el edificio ────────
+  const [edificioInput, setEdificioInput] = useState('');
+  const buscarEdificio = () => setSubjectId(edificioInput.trim() || null);
+
+  // ── Panel de configuración en móvil: oculto por defecto, se abre con el botón hamburguesa ─
+  const [panelAbierto, setPanelAbierto] = useState(false);
+
+  // ── Alertas de stock crítico (histórico global, independiente del alcance) ─
+  const [alertasData,     setAlertasData]     = useState(null);
+  const [alertasCargando, setAlertasCargando] = useState(false);
+  const [alertasError,    setAlertasError]    = useState(null);
+
+  const fetchAlertas = useCallback(async () => {
+    setAlertasCargando(true);
+    setAlertasError(null);
+    try {
+      const res = await api.get('/inventario/alertas-criticas');
+      setAlertasData(res.data || []);
+    } catch (err) {
+      setAlertasError(err.response?.data?.message || err.message || 'Error al cargar alertas');
+    } finally {
+      setAlertasCargando(false);
+    }
+  }, []);
 
   // ── Refs de los charts para la previsualización UI (sin cambios) ───────
   const lineChartRef     = useRef(null);
@@ -750,10 +875,20 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
     if (isOpen) {
       setScope(initialScope);
       setSubjectId(initialSubjectId);
+      setEdificioInput(initialScope === 'inventario' && initialSubjectId ? String(initialSubjectId) : '');
       setPreviewData(null);
       setError(null);
+      setAlertasData(null);
+      setAlertasError(null);
+      setIncluir(prev => ({ ...prev, alertas: initialIncluirAlertas }));
+      setPanelAbierto(false);
     }
-  }, [isOpen, initialScope, initialSubjectId]);
+  }, [isOpen, initialScope, initialSubjectId, initialIncluirAlertas]);
+
+  // Cargar alertas críticas la primera vez que se activa el checkbox
+  useEffect(() => {
+    if (isOpen && incluir.alertas && alertasData === null && !alertasCargando) fetchAlertas();
+  }, [isOpen, incluir.alertas, alertasData, alertasCargando, fetchAlertas]);
 
   // ── Cargar catálogos al montar ─────────────────────────────────────────
   useEffect(() => {
@@ -784,6 +919,9 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
         const p = modoPeriodo === 'mes' ? 'mes' : (periodo || 'semana');
         res = await api.get(`/reportes/usuario/${subjectId}?periodo=${p}`);
         setPreviewData({ tipo: 'usuario', data: res.data });
+      } else if (scope === 'inventario') {
+        res = await api.get(`/inventario/edificio/${encodeURIComponent(subjectId)}`);
+        setPreviewData({ tipo: 'inventario', data: res.data || [] });
       }
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Error al cargar los datos');
@@ -809,6 +947,9 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
       const u = catalogoUsuarios.find(u => String(u.id) === String(subjectId));
       return u ? `Usuario: ${u.nombre}` : 'Usuario seleccionado';
     }
+    if (scope === 'inventario') {
+      return subjectId ? `Edificio: ${subjectId}` : 'Edificio seleccionado';
+    }
     return scope;
   })();
 
@@ -817,6 +958,9 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
   const insumoData    = previewData?.tipo === 'insumo'   ? previewData.data : null;
   const usuarioData   = previewData?.tipo === 'usuario'
     ? (Array.isArray(previewData.data) ? previewData.data : (previewData.data?.datos ?? []))
+    : null;
+  const inventarioData = previewData?.tipo === 'inventario'
+    ? (Array.isArray(previewData.data) ? previewData.data : [])
     : null;
 
   // ── Datasets (compartidos entre preview UI y generación offscreen) ─────
@@ -879,6 +1023,46 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
     };
   })() : null;
 
+  // ── Inventario por edificio: KPIs y dataset de la gráfica ──────────────
+  const esCritico = (item) => Number(item.stock_actual) <= Number(item.stock_minimo);
+
+  const inventarioKpis = inventarioData ? {
+    totalProductos: inventarioData.length,
+    criticos: inventarioData.filter(esCritico).length,
+    totalUnidades: inventarioData.reduce((acc, it) => acc + (Number(it.stock_actual) || 0), 0),
+  } : null;
+
+  const inventarioChartData = inventarioData && inventarioData.length > 0 ? (() => {
+    const ordenado = [...inventarioData].sort((a, b) => Number(b.stock_actual) - Number(a.stock_actual)).slice(0, 10);
+    return {
+      labels: ordenado.map(it => it.producto?.nombre || `#${it.producto_id}`),
+      datasets: [
+        {
+          label: 'Stock Actual',
+          data: ordenado.map(it => Number(it.stock_actual) || 0),
+          backgroundColor: ordenado.map(it => esCritico(it) ? PALETTE.rose : PALETTE.cyan),
+          borderRadius: 6
+        },
+        {
+          label: 'Stock Mínimo',
+          data: ordenado.map(it => Number(it.stock_minimo) || 0),
+          backgroundColor: 'rgba(148,163,184,0.35)',
+          borderRadius: 6
+        }
+      ]
+    };
+  })() : null;
+
+  // ── Alertas críticas: dataset de tabla normalizado (nombres de campo defensivos) ─
+  const alertasFilas = (alertasData || []).map(a => ({
+    fecha: a.fecha,
+    producto: a.producto?.nombre || `Producto #${a.producto_id ?? '—'}`,
+    unidad: a.producto?.unidad_medida || '',
+    edificio: a.edificio || '—',
+    stockAlMomento: a.stock_actual ?? a.stock_al_momento ?? a.cantidad ?? null,
+    stockMinimo: a.stock_minimo ?? null,
+  }));
+
   // ── Exportar ───────────────────────────────────────────────────────────
   const handleExportar = async (formato) => {
     if (!previewData) return;
@@ -893,6 +1077,9 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
       } else if (previewData.tipo === 'insumo') {
         data = previewData.data;
         kpis = previewData.data?.estadisticas;
+      } else if (previewData.tipo === 'inventario') {
+        data = inventarioData;
+        kpis = inventarioKpis;
       } else {
         data = Array.isArray(previewData.data)
           ? previewData.data
@@ -900,8 +1087,10 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
         kpis = null;
       }
 
+      const alertas = incluir.alertas ? alertasFilas : [];
+
       if (formato === 'excel') {
-        await generarExcel({ scope, labelMes, kpis, data, labelScope });
+        await generarExcel({ scope, labelMes, kpis, data, labelScope, alertas, incluirAlertas: incluir.alertas });
       } else {
         // Pasar los datasets calculados para que generarPDF los use en offscreen
         await generarPDF({
@@ -912,6 +1101,8 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
           deptosData,
           insumoChartData,
           usuarioChartData,
+          inventarioChartData,
+          alertas,
         });
       }
     } catch (e) {
@@ -934,25 +1125,34 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-3"
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center sm:p-3"
         onClick={onClose}
       >
         <div
-          className="bg-app rounded-2xl w-full max-w-[860px] shadow-2xl flex flex-col max-h-[92vh] overflow-hidden"
+          className="bg-app w-full h-full sm:h-auto sm:max-w-[860px] sm:rounded-2xl shadow-2xl flex flex-col max-h-full sm:max-h-[92vh] overflow-hidden"
           onClick={e => e.stopPropagation()}
           style={{ minHeight: '560px' }}
         >
           {/* ── HEADER ─────────────────────────────────────────────────── */}
-          <div className="p-4 border-b border-border flex items-start justify-between gap-3 bg-card shrink-0">
-            <div className="flex items-center gap-2.5">
+          <div className="p-3 sm:p-4 border-b border-border flex items-start justify-between gap-3 bg-card shrink-0">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <button
+                onClick={() => setPanelAbierto(true)}
+                className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-border text-text-secondary transition-colors shrink-0"
+                title="Configuración del reporte"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
+                </svg>
+              </button>
               <div className="w-8 h-8 rounded-lg bg-[var(--accent-glow)] flex items-center justify-center border border-[var(--accent-glow-strong)] shrink-0">
                 <svg className="w-4 h-4 text-accent" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
                 </svg>
               </div>
-              <div>
-                <h3 className="font-heading font-extrabold text-base text-text-primary leading-tight">Reporte Personalizado</h3>
-                <p className="text-[0.72rem] text-text-muted font-sans">Configura, previsualiza y exporta tus reportes</p>
+              <div className="min-w-0">
+                <h3 className="font-heading font-extrabold text-base text-text-primary leading-tight truncate">Reporte Personalizado</h3>
+                <p className="text-[0.72rem] text-text-muted font-sans truncate hidden sm:block">Configura, previsualiza y exporta tus reportes</p>
               </div>
             </div>
             <button onClick={onClose} className="p-1.5 rounded-full hover:bg-border text-text-secondary transition-colors shrink-0">
@@ -963,23 +1163,46 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
           </div>
 
           {/* ── BODY: panel izquierdo + preview derecho ────────────────── */}
-          <div className="flex flex-1 overflow-hidden">
+          <div className="relative flex flex-col md:flex-row flex-1 min-h-0 overflow-hidden">
 
-            {/* Panel de configuración */}
-            <div className="w-[260px] shrink-0 flex flex-col gap-5 p-4 border-r border-border overflow-y-auto bg-card/50">
+            {/* Panel de configuración — en móvil es un overlay oculto por defecto,
+                se abre con el botón de hamburguesa del header */}
+            <div className={`
+              ${panelAbierto ? 'flex' : 'hidden'} md:flex
+              absolute md:static inset-0 z-20
+              w-full md:w-[260px] shrink-0 flex-col gap-5 p-4
+              border-b md:border-b-0 md:border-r border-border
+              overflow-y-auto bg-app md:bg-card/50
+              max-h-full md:max-h-none
+            `}>
+              {/* Encabezado del panel, solo visible en móvil */}
+              <div className="flex items-center justify-between md:hidden -mt-1 -mx-1 pb-1 border-b border-border">
+                <p className="font-heading font-bold text-sm text-text-primary px-1">Configuración del reporte</p>
+                <button
+                  onClick={() => setPanelAbierto(false)}
+                  className="p-1.5 rounded-full hover:bg-border text-text-secondary transition-colors shrink-0"
+                  title="Cerrar configuración"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                  </svg>
+                </button>
+              </div>
+
 
               {/* Alcance */}
               <Section title="Alcance">
-                <div className="flex flex-col gap-1.5">
+                <div className="flex md:flex-col gap-1.5 overflow-x-auto md:overflow-visible -mx-1 px-1 md:mx-0 md:px-0 pb-1 md:pb-0">
                   {[
-                    { key: 'global',  label: 'Global',  icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
-                    { key: 'insumo',  label: 'Por Insumo', icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 10V7' },
-                    { key: 'usuario', label: 'Por Usuario', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
+                    { key: 'global',     label: 'Global',       icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
+                    { key: 'insumo',     label: 'Por Insumo',   icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 10V7' },
+                    { key: 'usuario',    label: 'Por Usuario',  icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
+                    { key: 'inventario', label: 'Por Edificio', icon: 'M3 21h18M5 21V5a2 2 0 012-2h10a2 2 0 012 2v16M9 21V9h6v12M9 6h.01M9 12h.01M15 6h.01M15 12h.01' },
                   ].map(({ key, label, icon }) => (
                     <button
                       key={key}
                       onClick={() => { setScope(key); setSubjectId(null); }}
-                      className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[0.8rem] font-semibold transition-all border text-left ${
+                      className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[0.8rem] font-semibold transition-all border text-left shrink-0 whitespace-nowrap ${
                         scope === key
                           ? 'bg-accent/10 border-accent text-accent'
                           : 'bg-inputBg border-border text-text-secondary hover:border-accent/40'
@@ -995,7 +1218,7 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
               </Section>
 
               {/* Selector dinámico */}
-              {scope !== 'global' && (
+              {scope !== 'global' && scope !== 'inventario' && (
                 <Section title={scope === 'insumo' ? 'Seleccionar Insumo' : 'Seleccionar Usuario'}>
                   <select
                     value={subjectId || ''}
@@ -1008,6 +1231,36 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                       : catalogoUsuarios.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)
                     }
                   </select>
+                </Section>
+              )}
+
+              {/* Selector de edificio (texto libre: el catálogo de edificios vive
+                  en stock_edificio y aún no hay endpoint de listado) */}
+              {scope === 'inventario' && (
+                <Section title="Edificio">
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={edificioInput}
+                      onChange={e => setEdificioInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') buscarEdificio(); }}
+                      placeholder="Ej. Edificio 14A"
+                      className="flex-1 min-w-0 bg-inputBg border-[1.5px] border-border rounded-lg py-2 px-3 text-[0.82rem] text-text-primary outline-none focus:border-accent"
+                    />
+                    <button
+                      onClick={buscarEdificio}
+                      disabled={!edificioInput.trim()}
+                      className="px-3 py-2 bg-inputBg border border-border rounded-lg text-text-secondary hover:border-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      title="Buscar"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z"/>
+                      </svg>
+                    </button>
+                  </div>
+                  <p className="text-[0.65rem] text-text-muted mt-1.5">
+                    Escribe el nombre exacto del edificio y presiona Enter o el botón de búsqueda.
+                  </p>
                 </Section>
               )}
 
@@ -1082,10 +1335,22 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                   ))}
                 </div>
               </Section>
+
+              {/* CTA solo en móvil: cierra el panel y muestra la previsualización */}
+              <button
+                onClick={() => setPanelAbierto(false)}
+                className="md:hidden mt-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-accent text-white rounded-lg font-heading font-bold text-sm shadow-sm hover:bg-accent/90 transition-colors shrink-0"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                </svg>
+                Ver previsualización
+              </button>
             </div>
 
             {/* Panel de Preview */}
-            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
+            <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 flex flex-col gap-5">
 
               {cargando && (
                 <div className="flex-1 flex flex-col items-center justify-center gap-3 text-text-muted">
@@ -1114,7 +1379,9 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                   <svg className="w-10 h-10 opacity-30" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5"/>
                   </svg>
-                  <p className="text-sm">Selecciona un {scope} para previsualizar el reporte</p>
+                  <p className="text-sm">
+                    {scope === 'inventario' ? 'Escribe el nombre de un edificio para previsualizar su inventario' : `Selecciona un ${scope} para previsualizar el reporte`}
+                  </p>
                 </div>
               )}
 
@@ -1279,7 +1546,7 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                   {previewData.tipo === 'usuario' && Array.isArray(usuarioData) && (
                     <>
                       {incluir.kpis && (
-                        <div className="grid grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                           <KpiCard label="Total Movimientos" value={usuarioData.length} sub="en el período" />
                           <KpiCard label="Entradas"          value={usuarioData.filter(m => m.tipo === 'ENTRADA').length} colorClass="text-emerald-400" sub="procesadas" />
                           <KpiCard label="Salidas / Pedidos" value={usuarioData.filter(m => m.tipo === 'SALIDA').length}  sub="solicitadas" />
@@ -1336,28 +1603,149 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                       )}
                     </>
                   )}
+
+                  {/* ── INVENTARIO POR EDIFICIO ──────────────────────── */}
+                  {previewData.tipo === 'inventario' && Array.isArray(inventarioData) && (
+                    <>
+                      {inventarioData.length === 0 ? (
+                        <div className="flex-1 flex flex-col items-center justify-center gap-2 text-text-muted py-10">
+                          <svg className="w-10 h-10 opacity-30" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 10V7"/>
+                          </svg>
+                          <p className="text-sm">Sin registros de stock para este edificio</p>
+                        </div>
+                      ) : (
+                        <>
+                          {incluir.kpis && (
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              <KpiCard label="Productos" value={inventarioKpis?.totalProductos} sub="registrados en el edificio" />
+                              <KpiCard label="Insumos Críticos" value={inventarioKpis?.criticos} colorClass={inventarioKpis?.criticos > 0 ? 'text-red-400' : 'text-text-primary'} sub="bajo stock mínimo" />
+                              <KpiCard label="Unidades en Stock" value={inventarioKpis?.totalUnidades?.toLocaleString('es-MX')} sub="suma total" />
+                            </div>
+                          )}
+
+                          {incluir.graficaTendencia && inventarioChartData && (
+                            <div className="bg-card border border-border rounded-xl p-4">
+                              <p className="text-[0.7rem] font-heading font-bold uppercase tracking-wider text-text-muted mb-3">Stock Actual vs. Mínimo (Top 10)</p>
+                              <div className="h-[200px]">
+                                <Bar data={inventarioChartData} options={commonChartOpts} />
+                              </div>
+                            </div>
+                          )}
+
+                          {incluir.movimientos && (
+                            <div className="bg-card border border-border rounded-xl overflow-hidden">
+                              <div className="px-4 py-2.5 border-b border-border">
+                                <p className="text-[0.7rem] font-heading font-bold uppercase tracking-wider text-text-muted">
+                                  Desglose · {inventarioData.length} productos
+                                </p>
+                              </div>
+                              <div className="overflow-x-auto max-h-[260px] overflow-y-auto">
+                                <table className="w-full text-[0.78rem]">
+                                  <thead className="bg-inputBg sticky top-0">
+                                    <tr>
+                                      {['Producto', 'Categoría', 'Stock Actual', 'Stock Mínimo', 'Estado'].map(h => (
+                                        <th key={h} className="px-3 py-2 text-left text-[0.65rem] font-heading font-bold uppercase tracking-wide text-text-muted">{h}</th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {inventarioData.map((it, i) => {
+                                      const critico = esCritico(it);
+                                      return (
+                                        <tr key={it.id ?? i} className="border-t border-border/50 hover:bg-inputBg/50">
+                                          <td className="px-3 py-2 text-text-primary font-medium">{it.producto?.nombre || `#${it.producto_id}`}</td>
+                                          <td className="px-3 py-2 text-text-secondary">{it.producto?.categoria || '—'}</td>
+                                          <td className="px-3 py-2 font-semibold text-text-primary">{it.stock_actual} <span className="text-text-muted text-[0.7rem]">{it.producto?.unidad_medida}</span></td>
+                                          <td className="px-3 py-2 text-text-muted">{it.stock_minimo}</td>
+                                          <td className="px-3 py-2">
+                                            <span className={`px-1.5 py-0.5 rounded text-[0.65rem] font-bold ${critico ? 'bg-red-500/15 text-red-400' : 'bg-emerald-500/15 text-emerald-400'}`}>
+                                              {critico ? 'CRÍTICO' : 'OK'}
+                                            </span>
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </>
+                  )}
                 </>
+              )}
+
+              {/* ── ALERTAS DE STOCK CRÍTICO (histórico global, cualquier alcance) ── */}
+              {incluir.alertas && (
+                <div className="bg-card border border-border rounded-xl overflow-hidden">
+                  <div className="px-4 py-2.5 border-b border-border flex items-center justify-between">
+                    <p className="text-[0.7rem] font-heading font-bold uppercase tracking-wider text-text-muted">
+                      Alertas de Stock Crítico · Histórico
+                    </p>
+                    {alertasCargando && <Spinner className="w-3.5 h-3.5 text-accent" />}
+                  </div>
+
+                  {alertasError && !alertasCargando && (
+                    <div className="px-4 py-3 text-xs text-red-400 flex items-center justify-between gap-2">
+                      <span>{alertasError}</span>
+                      <button onClick={fetchAlertas} className="font-bold underline hover:no-underline shrink-0">Reintentar</button>
+                    </div>
+                  )}
+
+                  {!alertasCargando && !alertasError && alertasFilas.length === 0 && (
+                    <p className="px-4 py-3 text-xs text-text-muted italic">Sin registros de desabasto en el histórico</p>
+                  )}
+
+                  {!alertasCargando && !alertasError && alertasFilas.length > 0 && (
+                    <div className="overflow-x-auto max-h-[200px] overflow-y-auto">
+                      <table className="w-full text-[0.78rem]">
+                        <thead className="bg-inputBg sticky top-0">
+                          <tr>
+                            {['Fecha', 'Producto', 'Edificio', 'Stock al momento'].map(h => (
+                              <th key={h} className="px-3 py-2 text-left text-[0.65rem] font-heading font-bold uppercase tracking-wide text-text-muted">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {alertasFilas.map((a, i) => (
+                            <tr key={i} className="border-t border-border/50 hover:bg-inputBg/50">
+                              <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{a.fecha ? new Date(a.fecha).toLocaleDateString('es-MX') : '—'}</td>
+                              <td className="px-3 py-2 text-text-primary font-medium">{a.producto} {a.unidad && <span className="text-text-muted text-[0.7rem]">({a.unidad})</span>}</td>
+                              <td className="px-3 py-2 text-text-secondary">{a.edificio}</td>
+                              <td className="px-3 py-2 font-semibold text-red-400">{a.stockAlMomento ?? '—'}{a.stockMinimo != null ? ` / min. ${a.stockMinimo}` : ''}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>
 
           {/* ── FOOTER ─────────────────────────────────────────────────── */}
-          <div className="p-3.5 border-t border-border bg-card flex items-center justify-between gap-2 shrink-0 flex-wrap sm:flex-nowrap">
-            <button onClick={onClose} className="px-4 py-2 text-sm font-heading font-semibold text-text-secondary hover:bg-border rounded-lg transition-colors">
+          <div className="p-3 sm:p-3.5 border-t border-border bg-card flex items-center justify-between gap-2 shrink-0 flex-wrap">
+            <button onClick={onClose} className="px-3 sm:px-4 py-2 text-sm font-heading font-semibold text-text-secondary hover:bg-border rounded-lg transition-colors">
               Cancelar
             </button>
 
-            <div className="flex items-center gap-2 ml-auto">
+            <div className="flex items-center gap-2 ml-auto flex-wrap justify-end">
               {!puedeExportar && !cargando && (
-                <p className="text-[0.72rem] text-text-muted italic mr-2">
-                  {necesitaSujeto && !subjectId ? `Selecciona un ${scope}` : 'Sin datos disponibles'}
+                <p className="text-[0.72rem] text-text-muted italic mr-2 hidden sm:block">
+                  {necesitaSujeto && !subjectId
+                    ? (scope === 'inventario' ? 'Ingresa un edificio' : `Selecciona un ${scope}`)
+                    : 'Sin datos disponibles'}
                 </p>
               )}
 
               <button
                 onClick={() => handleExportar('excel')}
                 disabled={!puedeExportar || generando !== null}
-                className="flex items-center justify-center gap-2 px-4 py-2 bg-inputBg border border-border text-text-primary hover:border-accent rounded-lg font-heading font-semibold text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-inputBg border border-border text-text-primary hover:border-accent rounded-lg font-heading font-semibold text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {generando === 'excel'
                   ? <Spinner className="w-4 h-4" />
@@ -1369,7 +1757,7 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
               <button
                 onClick={() => handleExportar('pdf')}
                 disabled={!puedeExportar || generando !== null}
-                className="flex items-center justify-center gap-2 px-4 py-2 bg-accent text-white hover:bg-accent/90 rounded-lg font-heading font-semibold text-sm transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-accent text-white hover:bg-accent/90 rounded-lg font-heading font-semibold text-sm transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {generando === 'pdf'
                   ? <Spinner className="w-4 h-4" />

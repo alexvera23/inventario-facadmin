@@ -3,20 +3,21 @@ const { Prisma } = require('@prisma/client');
 const auditoriaService = require('./auditoriaService');
 
 class MovimientoService {
-   async registrarMovimientoMasivo({ tipo, solicitanteId, encargadoId, observaciones, items }) {
+   async registrarMovimientoMasivo({ tipo, solicitanteId, encargadoId, observaciones, items, edificio }) {
         // 1. Validaciones iniciales
         if (!['ENTRADA', 'SALIDA'].includes(tipo)) throw new Error('TIPO_MOVIMIENTO_INVALIDO');
         if (!Array.isArray(items) || items.length === 0) throw new Error('CARRITO_VACIO');
+        if (!edificio) throw new Error('EDIFICIO_REQUERIDO'); //  VALIDACIÓN CRÍTICA
 
         return await prisma.$transaction(async (tx) => {
             
-            // 2. Validar que el Encargado (El que despacha/recibe) exista
+            // 2. Validar que el Encargado exista
             const encargado = await tx.usuario.findUnique({
                 where: { id: parseInt(encargadoId) }
             });
             if (!encargado) throw new Error('ENCARGADO_NOT_FOUND');
 
-            // 3. Validar Solicitante (Es obligatorio si es SALIDA, pero opcional en ENTRADA)
+            // 3. Validar Solicitante
             let solicitante = null;
             if (solicitanteId) {
                 solicitante = await tx.usuario.findUnique({
@@ -30,13 +31,10 @@ class MovimientoService {
             const movimientosRegistrados = [];
 
             // 4. Bucle para procesar cada artículo del carrito
-            // Usamos for...of porque await funciona perfectamente dentro de él para mantener la secuencia
             for (const item of items) {
                 const producto = await tx.producto.findUnique({
                     where: { id: parseInt(item.productoId) }
                 });
-                
-                // Le pegamos el ID al error para que el Front sepa cuál falló
                 if (!producto) throw new Error(`PRODUCTO_NOT_FOUND:${item.productoId}`);
 
                 // Calcular la cantidad neta
@@ -52,31 +50,75 @@ class MovimientoService {
                     cantidadNeta = cantidadNeta.mul(embalaje.factor_conversion);
                 }
 
-                let nuevoStock;
-
-                // Lógica de inventario por artículo
-                if (tipo === 'SALIDA') {
-                    if (producto.stock_actual.lt(cantidadNeta)) {
-                        // Enviamos el nombre del producto para una alerta amigable
-                        throw new Error(`STOCK_INSUFICIENTE:${producto.nombre}`);
+                //  OBTENER EL STOCK EN EL EDIFICIO SOLICITADO
+                let registroStock = await tx.stockEdificio.findUnique({
+                    where: {
+                        producto_id_edificio: {
+                            producto_id: producto.id,
+                            edificio: edificio
+                        }
                     }
-                    nuevoStock = producto.stock_actual.minus(cantidadNeta);
-                } else {
-                    nuevoStock = producto.stock_actual.plus(cantidadNeta);
+                });
+
+                if (!registroStock && tipo === 'SALIDA') {
+                    throw new Error(`STOCK_NO_ENCONTRADO_EN_EDIFICIO:${producto.nombre}`);
                 }
 
-                // Actualizar el stock de este producto
-                await tx.producto.update({
-                    where: { id: producto.id },
+                // Si es entrada y el edificio no tenía stock, se crea el registro inicial en cero
+                if (!registroStock && tipo === 'ENTRADA') {
+                    registroStock = await tx.stockEdificio.create({
+                        data: {
+                            producto_id: producto.id,
+                            edificio: edificio,
+                            stock_actual: 0,
+                            stock_minimo: 5 // Default configurable posteriormente
+                        }
+                    });
+                }
+
+                let nuevoStock;
+                const stockAnterior = registroStock.stock_actual;
+
+                // Lógica de inventario multi-ubicación
+                if (tipo === 'SALIDA') {
+                    if (stockAnterior.lt(cantidadNeta)) {
+                        throw new Error(`STOCK_INSUFICIENTE:${producto.nombre}`);
+                    }
+                    nuevoStock = stockAnterior.minus(cantidadNeta);
+                } else {
+                    nuevoStock = stockAnterior.plus(cantidadNeta);
+                }
+
+                //  ACTUALIZAR EL STOCK DEL EDIFICIO
+                await tx.stockEdificio.update({
+                    where: { id: registroStock.id },
                     data: { stock_actual: nuevoStock }
                 });
 
-                // Registrar la fila en la bitácora
+                //  DISPARADOR: ALERTA DE STOCK CRÍTICO
+                if (tipo === 'SALIDA') {
+                    const stockMinimo = registroStock.stock_minimo;
+                    
+                    // Condición: Antes estaba BIEN (> min), pero AHORA está CRÍTICO (<= min)
+                    if (stockAnterior.gt(stockMinimo) && nuevoStock.lte(stockMinimo)) {
+                        await tx.historialStockCritico.create({
+                            data: {
+                                producto_id: producto.id,
+                                edificio: edificio,
+                                stock_visto: nuevoStock,
+                                stock_min: stockMinimo
+                            }
+                        });
+                    }
+                }
+
+                // Registrar la fila en la bitácora incluyendo la sede
                 const nuevoMovimiento = await tx.movimiento.create({
                     data: {
                         producto_id: producto.id,
                         tipo: tipo,
                         cantidad: cantidadNeta,
+                        edificio: edificio, //  REGISTRO GEOGRÁFICO
                         solicitante_id: solicitante ? solicitante.id : null,
                         encargado_id: encargado.id,
                         observaciones: observaciones || null
@@ -86,7 +128,6 @@ class MovimientoService {
                 movimientosRegistrados.push(nuevoMovimiento);
             }
 
-            // Si el bucle termina sin errores, Prisma hace el COMMIT automáticamente
             return movimientosRegistrados;
         });
     }
@@ -104,7 +145,7 @@ class MovimientoService {
         });
     }
     //Editar Transaccion con Compensación 
-    async actualizarTransaccion(id, nuevaCantidad, observaciones, solicitanteId, adminId) {
+    async actualizarTransaccion(id, nuevaCantidad, nuevoTipo, observaciones, solicitanteId, adminId) {
         // Ejecutamos todo dentro de una transacción interactiva de Prisma
         return await prisma.$transaction(async (tx) => {
             
@@ -116,54 +157,73 @@ class MovimientoService {
 
             if (!movViejo) throw new Error('NOT_FOUND');
 
-            // 2. Calcular la diferencia matemática
-            // Parseamos a Float porque Decimal en Prisma viene como objeto
             const cantidadVieja = parseFloat(movViejo.cantidad);
             const cantidadNueva = parseFloat(nuevaCantidad);
             
-            const diferencia = cantidadNueva - cantidadVieja;
-            
-            // Si es SALIDA, el ajuste en stock es inverso (si resto menos, el stock sube)
-            let ajusteStock = movViejo.tipo === 'ENTRADA' ? diferencia : -diferencia;
+            // Si no envían un nuevo tipo, mantenemos el que ya tenía
+            const tipoFinal = nuevoTipo ? nuevoTipo.toUpperCase() : movViejo.tipo;
 
-            // 3. Validar que el ajuste no deje el stock en negativo
-            const nuevoStock = parseFloat(movViejo.producto.stock_actual) + ajusteStock;
+            // 2. Calcular la diferencia matemática (Reversión + Nueva Aplicación)
+            let ajusteStock = 0;
+            
+            // Paso A: Deshacer el impacto del movimiento original
+            // Si era ENTRADA, al deshacerlo restamos. Si era SALIDA, sumamos.
+            ajusteStock += movViejo.tipo === 'ENTRADA' ? -cantidadVieja : cantidadVieja;
+            
+            // Paso B: Aplicar el nuevo impacto
+            // Si ahora es ENTRADA, sumamos. Si es SALIDA, restamos.
+            ajusteStock += tipoFinal === 'ENTRADA' ? cantidadNueva : -cantidadNueva;
+
+            // 3. Buscar el inventario específico en la sede donde ocurrió el movimiento
+            const stockSede = await tx.stockEdificio.findFirst({
+                where: {
+                    producto_id: movViejo.producto_id,
+                    edificio: movViejo.edificio
+                }
+            });
+
+            if (!stockSede) throw new Error('STOCK_RECORD_NOT_FOUND');
+
+            // 4. Validar que el ajuste no deje el stock del edificio en negativo
+            const nuevoStock = parseFloat(stockSede.stock_actual) + ajusteStock;
             if (nuevoStock < 0) {
                 throw new Error('STOCK_INSUFICIENTE');
             }
 
-            // 4. Actualizar el registro del movimiento
+            // 5. Actualizar el registro del movimiento
             const movActualizado = await tx.movimiento.update({
                 where: { id: movViejo.id },
                 data: {
                     cantidad: cantidadNueva,
+                    tipo: tipoFinal,
                     observaciones: observaciones !== undefined ? observaciones : movViejo.observaciones,
                     solicitante_id: solicitanteId !== undefined ? solicitanteId : movViejo.solicitante_id
                 }
             });
 
-            // 5. Actualizar el stock del producto
+            // 6. Actualizar el stock del edificio correspondiente
             if (ajusteStock !== 0) {
-                await tx.producto.update({
-                    where: { id: movViejo.producto_id },
+                await tx.stockEdificio.update({
+                    where: { id: stockSede.id },
                     data: {
                         stock_actual: {
-                            increment: ajusteStock // Prisma se encarga de la suma o resta segura
+                            increment: ajusteStock 
                         }
                     }
                 });
             }
 
-            // 6.  Registrar en la BITÁCORA DE AUDITORÍA
-            // Usamos el auditoriaService inyectando nuestro objeto 'tx' si fuera posible, 
-            // pero para simplificar, lo registramos directo en la misma transacción:
+            // 7. Registrar en la BITÁCORA DE AUDITORÍA
+            // Documentamos si cambió el tipo, la cantidad o ambos.
+            const detalleTipo = movViejo.tipo !== tipoFinal ? ` Cambió de ${movViejo.tipo} a ${tipoFinal}.` : '';
+            
             await tx.auditoria.create({
                 data: {
                     usuario_id: adminId,
                     accion: 'ACTUALIZAR',
                     entidad: 'MOVIMIENTO',
                     entidad_id: movViejo.id,
-                    detalles: `Modificó transacción #${movViejo.id} (${movViejo.tipo} de ${movViejo.producto.nombre}). Cantidad: ${cantidadVieja} -> ${cantidadNueva}. Ajuste en stock: ${ajusteStock > 0 ? '+'+ajusteStock : ajusteStock}.`
+                    detalles: `Modificó transacción #${movViejo.id} (${movViejo.producto.nombre} en ${movViejo.edificio}).${detalleTipo} Cantidad: ${cantidadVieja} -> ${cantidadNueva}. Ajuste neto en sede: ${ajusteStock > 0 ? '+'+ajusteStock : ajusteStock}.`
                 }
             });
 

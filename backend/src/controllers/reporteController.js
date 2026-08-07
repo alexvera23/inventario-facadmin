@@ -6,7 +6,6 @@ class ReporteController {
     async reporteGeneral(req, res) {
         try {
             const { periodo, tipo } = req.query; 
-            
             const reporte = await reporteService.obtenerReporteGeneral(periodo, tipo);
             
             return res.status(200).json({
@@ -26,9 +25,7 @@ class ReporteController {
             const { id } = req.params;
             const { periodo } = req.query;
 
-            if (!id) {
-                return res.status(400).json({ message: 'El ID del usuario es obligatorio.' });
-            }
+            if (!id) return res.status(400).json({ message: 'El ID del usuario es obligatorio.' });
 
             const actividad = await reporteService.obtenerActividadUsuario(id, periodo);
             
@@ -50,11 +47,8 @@ class ReporteController {
             const { id } = req.params;
             const { periodo } = req.query;
 
-            if (!id) {
-                return res.status(400).json({ message: 'El ID del producto es obligatorio.' });
-            }
+            if (!id) return res.status(400).json({ message: 'El ID del producto es obligatorio.' });
 
-            // Llamamos al servicio
             const datosActividad = await reporteService.obtenerActividadProducto(id, periodo);
             
             return res.status(200).json({
@@ -83,8 +77,6 @@ class ReporteController {
             return res.status(500).json({ message: 'Error interno al generar analíticas.' });
         }
     }
-
-    
 }
 
 module.exports = new ReporteController();

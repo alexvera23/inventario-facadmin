@@ -9,8 +9,9 @@ import { useAuth } from '../../context/AuthContext';
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Filler);
 
 export default function DetailDrawer({ isOpen, onClose, producto, onOpenReport, onOpenEdit }) {
-  //Extraemos el usuario activo (se nombre currentUser para evitar conflictos)
+  //Extraemos el usuario activo
   const { user: currentUser } = useAuth();
+  
   // --------------------------------------------------------
   // ESTADOS DEL DRAWER
   // --------------------------------------------------------
@@ -24,7 +25,6 @@ export default function DetailDrawer({ isOpen, onClose, producto, onOpenReport, 
     if (isOpen && producto) {
       fetchDetallesInsumo();
     } else {
-      // Limpiar estados si se cierra
       setMovimientos([]);
       setChartData(null);
     }
@@ -38,7 +38,10 @@ export default function DetailDrawer({ isOpen, onClose, producto, onOpenReport, 
       
       setKpis(estadisticas);
       setMovimientos(movs);
-      generarDatosGrafica(movs, Number(producto.stock));
+      
+      // 🚀 Usamos el stock calculado desde la vista multi-sede
+      const stockActual = Number(producto.stockCalculado || producto.stock || 0);
+      generarDatosGrafica(movs, stockActual);
     } catch (error) {
       console.error('Error al obtener los detalles del insumo:', error);
     } finally {
@@ -50,7 +53,6 @@ export default function DetailDrawer({ isOpen, onClose, producto, onOpenReport, 
   // LÓGICA DE LA GRÁFICA (Curva de Stock de 7 días)
   // --------------------------------------------------------
   const generarDatosGrafica = (movs, stockActual) => {
-    // Generar etiquetas para los últimos 7 días
     const labels = [];
     const dataPoints = [];
     let stockSimulado = stockActual;
@@ -58,23 +60,20 @@ export default function DetailDrawer({ isOpen, onClose, producto, onOpenReport, 
     for (let i = 6; i >= 0; i--) {
       const fecha = new Date();
       fecha.setDate(fecha.getDate() - i);
-      labels.push(fecha.toLocaleDateString('es-MX', { weekday: 'short' })); // Ej: 'lun', 'mar'
+      labels.push(fecha.toLocaleDateString('es-MX', { weekday: 'short' })); 
 
-      // Buscar si hubo movimientos ese día para ajustar la curva hacia atrás
       const movsDelDia = movs.filter(m => new Date(m.fecha).toDateString() === fecha.toDateString());
       
       let variacionNeta = 0;
       movsDelDia.forEach(m => {
-        if (m.tipo === 'ENTRADA') variacionNeta -= Number(m.cantidad); // Restamos porque vamos hacia atrás
-        if (m.tipo === 'SALIDA') variacionNeta += Number(m.cantidad);  // Sumamos porque vamos hacia atrás
+        if (m.tipo === 'ENTRADA') variacionNeta -= Number(m.cantidad); 
+        if (m.tipo === 'SALIDA') variacionNeta += Number(m.cantidad);  
       });
 
-      // El stock al inicio de ese día
       stockSimulado = stockSimulado + variacionNeta;
-      dataPoints.unshift(stockSimulado); // Insertamos al inicio del arreglo
+      dataPoints.unshift(stockSimulado); 
     }
 
-    // Para que termine exactamente en el stock actual al final de la gráfica
     dataPoints[6] = stockActual; 
 
     setChartData({
@@ -83,13 +82,13 @@ export default function DetailDrawer({ isOpen, onClose, producto, onOpenReport, 
         {
           label: 'Nivel de Stock',
           data: dataPoints,
-          borderColor: '#38BDF8', // Tu color accent (Ajusta si usas variables CSS)
+          borderColor: '#38BDF8', 
           backgroundColor: 'rgba(56, 189, 248, 0.1)',
           borderWidth: 2,
           pointRadius: 3,
           pointBackgroundColor: '#38BDF8',
           fill: true,
-          tension: 0.3 // Curva suave
+          tension: 0.3 
         }
       ]
     });
@@ -106,7 +105,7 @@ export default function DetailDrawer({ isOpen, onClose, producto, onOpenReport, 
         bodyFont: { family: 'Inter', size: 12, weight: 'bold' },
         displayColors: false,
         callbacks: {
-          label: (context) => `${context.parsed.y} ${producto?.unidad || 'uds'}`
+          label: (context) => `${context.parsed.y} ${producto?.unidad_medida || 'uds'}`
         }
       }
     },
@@ -121,10 +120,14 @@ export default function DetailDrawer({ isOpen, onClose, producto, onOpenReport, 
   // --------------------------------------------------------
   if (!producto) return null;
 
-  const maxCapacidad = Number(producto.stockMaximo) || 100;
-  const porcentajeStock = Math.min((Number(producto.stock) / maxCapacidad) * 100, 100);
-  const esCritico = producto.estado === 'low';
-  const esModerado = producto.estado === 'mid';
+  //  Adaptación a las nuevas variables calculadas en el catálogo
+  const stockVisual = Number(producto.stockCalculado || producto.stock || 0);
+  const estadoVisual = producto.estadoCalculado || producto.estado || 'ok';
+  
+  const maxCapacidad = 100; // Podrías hacerlo dinámico después
+  const porcentajeStock = Math.min((stockVisual / maxCapacidad) * 100, 100);
+  const esCritico = estadoVisual === 'low';
+  const esModerado = estadoVisual === 'mid';
 
   return (
     <>
@@ -152,30 +155,26 @@ export default function DetailDrawer({ isOpen, onClose, producto, onOpenReport, 
           <div className="bg-inputBg border border-border rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <p className="text-[0.75rem] text-text-muted font-semibold">Stock Físico Actual</p>
-              <span className={`text-[0.65rem] font-heading font-bold px-2 py-0.5 rounded-full ${esCritico ? 'bg-red-500/10 text-red-500' : esModerado ? 'bg-yellow-500/10 text-yellow-600' : 'bg-green-500/10 text-green-600'}`}>
+              <span className={`text-[0.65rem] font-heading font-bold px-2 py-0.5 rounded-full ${esCritico && stockVisual > 0 ? 'bg-orange-500/10 text-orange-500' : esCritico ? 'bg-red-500/10 text-red-500' : esModerado ? 'bg-yellow-500/10 text-yellow-600' : 'bg-green-500/10 text-green-600'}`}>
                 {esCritico ? 'CRÍTICO' : esModerado ? 'MODERADO' : 'NORMAL'}
               </span>
             </div>
             <p className="text-accent font-heading font-extrabold text-3xl">
-              {Number(producto.stock).toFixed(2)} <span className="text-base text-text-muted">{producto.unidad}</span>
+              {stockVisual.toFixed(2)} <span className="text-base text-text-muted">{producto.unidad_medida}</span>
             </p>
             
             <div className="mt-3 bg-border rounded-full h-1.5 overflow-hidden">
               <div className={`h-full rounded-full transition-all duration-700 ease-out ${esCritico ? 'bg-red-500' : esModerado ? 'bg-yellow-500' : 'bg-accent'}`} style={{ width: `${porcentajeStock}%` }}></div>
             </div>
-            <p className="text-[0.7rem] text-text-muted mt-1.5 text-right font-mono">
-              ~{Math.round(porcentajeStock)}% de capacidad
-            </p>
           </div>
 
-          {/* Estado de carga general para el resto del Drawer */}
           {loading ? (
             <div className="flex-1 flex justify-center items-center py-10">
                <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin"></div>
             </div>
           ) : (
             <>
-              {/* Mini Stats (Grid 1x2) - DATOS REALES */}
+              {/* Mini Stats */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-inputBg border border-border rounded-xl p-3">
                   <p className="text-[0.65rem] text-text-muted font-semibold font-heading uppercase tracking-wider">Salidas esta semana</p>
@@ -195,7 +194,7 @@ export default function DetailDrawer({ isOpen, onClose, producto, onOpenReport, 
                 </div>
               </div>
 
-              {/* Últimos Movimientos - DATOS REALES */}
+              {/* Últimos Movimientos con Geolocalización */}
               <div>
                 <p className="text-[0.7rem] font-bold text-text-muted font-heading uppercase tracking-wider mb-2">Últimos Movimientos</p>
                 <div className="flex flex-col gap-3">
@@ -209,12 +208,13 @@ export default function DetailDrawer({ isOpen, onClose, producto, onOpenReport, 
                         <div>
                           <p className="font-semibold text-text-primary text-sm flex items-center gap-1.5">
                             {mov.involucrado} 
-                            <span className="text-[0.65rem] font-normal text-text-muted bg-inputBg px-1.5 py-0.5 rounded">
-                              {new Date(mov.fecha).toLocaleDateString('es-MX', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}
+                            {/*  Etiqueta de Sede y Fecha */}
+                            <span className="text-[0.6rem] font-bold text-accent bg-accent/10 px-1.5 py-0.5 rounded ml-1">
+                               {mov.edificio || 'Sede Central'}
                             </span>
                           </p>
-                          <p className="text-text-secondary text-[0.7rem] mt-0.5 truncate w-40" title={mov.observaciones || 'Operación regular'}>
-                            {mov.tipo === 'ENTRADA' ? 'Abastecimiento' : 'Despacho'} • {mov.observaciones || 'Regular'}
+                          <p className="text-text-secondary text-[0.7rem] mt-1 truncate w-48" title={mov.observaciones || 'Operación regular'}>
+                            {new Date(mov.fecha).toLocaleDateString('es-MX', { weekday: 'short', hour: '2-digit', minute: '2-digit' })} • {mov.tipo === 'ENTRADA' ? 'Abastecimiento' : 'Despacho'}
                           </p>
                         </div>
                         <span className={`font-bold font-mono text-sm ${mov.tipo === 'ENTRADA' ? 'text-[#4ADE80]' : 'text-red-500'}`}>
@@ -227,13 +227,11 @@ export default function DetailDrawer({ isOpen, onClose, producto, onOpenReport, 
               </div>
             </>
           )}
-
         </div>
 
         {/* Footer Actions */}
         <div className="p-4 border-t border-border bg-app flex flex-col gap-2">
           <div className={`grid gap-2 ${currentUser?.rol === 'ADMIN'? 'grid-cols-3': 'grid-cols-2'}`}>
-            {/*Solo se muestra si es ADMIN*/}
             {currentUser?.rol === 'ADMIN'&&(
               <button
               onClick={() => onOpenEdit(producto)} 
