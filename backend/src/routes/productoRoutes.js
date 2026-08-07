@@ -8,7 +8,7 @@ const { checkRole } = require('../middlewares/roleMiddleware');
 // Nota: El orden importa. Colocamos '/buscar' antes de '/:id' 
 // para evitar que Express confunda la palabra 'buscar' con un ID numérico.
 router.get('/', verificarToken, productoController.obtenerProductos);
-router.get('/buscar', verificarToken, productoController.buscarProductos);
+//router.get('/buscar', verificarToken, productoController.buscarProductos);
 router.get('/:id', verificarToken, productoController.obtenerProductoPorId);
 // Rutas de Escritura para Productos (POST, PUT, DELETE)
 router.post('/', verificarToken,  productoController.crearProducto);
