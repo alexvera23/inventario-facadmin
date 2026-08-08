@@ -67,10 +67,21 @@ class MovimientoController {
     // GET /api/movimientos/historial
     async obtenerHistorial(req, res) {
         try {
-            const historial = await movimientoService.obtenerHistorial();
+            // Extraer parámetros de paginación y filtros
+            const { page, limit, busqueda, tipo, edificio } = req.query;
+
+            const historial = await movimientoService.obtenerHistorial({
+                page,
+                limit,
+                busqueda,
+                tipo,
+                edificio
+            });
+
+            // Retorna { data: [...], pagination: {...} }
             return res.status(200).json(historial);
         } catch (error) {
-            console.error(' Error al recuperar bitácora:', error);
+            console.error('Error al recuperar bitácora:', error);
             return res.status(500).json({ message: 'Error al recuperar el historial.' });
         }
     }

@@ -2,23 +2,32 @@ const usuarioService = require('../services/usuarioService');
 
 class UsuarioController {
     
-    // GET /api/usuarios
+    //  GET /api/usuarios?page=1&limit=10&busqueda=Ana&rol=SOLICITANTE
     async obtenerTodos(req, res) {
         try {
-            // Ya no le pasamos parámetros, esta ruta siempre trae el reporte ligero del mes
-            const usuarios = await usuarioService.obtenerTodos();
-            return res.status(200).json(usuarios);
+            // Extraemos los parámetros de paginación y filtros
+            const { page, limit, busqueda, rol } = req.query;
+
+            const resultado = await usuarioService.obtenerTodos({
+                page,
+                limit,
+                busqueda,
+                rol
+            });
+
+            // Devolvemos el objeto paginado { data: [], pagination: {} }
+            return res.status(200).json(resultado);
         } catch (error) {
-            console.error('Error al obtener la lista de usuarios:', error);
+            console.error('Error al obtener la lista paginada de usuarios:', error);
             return res.status(500).json({ message: 'Error interno al consultar el directorio.' });
         }
     }
 
-    // GET /api/usuarios/:id
+    // GET /api/usuarios/:id?periodo=mes
     async obtenerPorId(req, res) {
         try {
             const { id } = req.params;
-            const { periodo } = req.query; // Opcional: ?periodo=mes
+            const { periodo } = req.query; 
 
             const usuario = await usuarioService.obtenerPorId(id, periodo || 'siempre');
             
@@ -36,15 +45,14 @@ class UsuarioController {
     // POST /api/usuarios
     async crearUsuario(req, res) {
         try {
-            const { id_interno, nombre, departamento, rol } = req.body;
+            const { id_interno, nombre, departamento } = req.body;
             const usuarioOperadorId = req.user.id;
 
-            // Validaciones básicas
             if (!id_interno || !nombre || !departamento) {
                 return res.status(400).json({ message: 'Los campos id_interno, nombre y departamento son obligatorios.' });
             }
 
-            const nuevoUsuario = await usuarioService.crear(req.body,usuarioOperadorId);
+            const nuevoUsuario = await usuarioService.crear(req.body, usuarioOperadorId);
             return res.status(201).json(nuevoUsuario);
             
         } catch (error) {
@@ -61,11 +69,11 @@ class UsuarioController {
         try {
             const { id } = req.params;
             const usuarioOperadorId = req.user.id;
-            const usuarioActualizado = await usuarioService.actualizar(id, req.body,usuarioOperadorId);
+            const usuarioActualizado = await usuarioService.actualizar(id, req.body, usuarioOperadorId);
             return res.status(200).json(usuarioActualizado);
         } catch (error) {
             console.error('Error al actualizar usuario:', error);
-            if (error.code === 'P2025') {
+            if (error.code === 'P2025' || error.message === 'NOT_FOUND') {
                 return res.status(404).json({ message: 'El usuario especificado no existe.' });
             }
             return res.status(500).json({ message: 'Error interno al actualizar la información del usuario.' });
@@ -77,7 +85,7 @@ class UsuarioController {
         try {
             const { id } = req.params;
             const usuarioOperadorId = req.user.id;
-            await usuarioService.eliminar(id,usuarioOperadorId);
+            await usuarioService.eliminar(id, usuarioOperadorId);
             return res.status(200).json({ message: 'Usuario eliminado correctamente del sistema.' });
         } catch (error) {
             console.error('Error al eliminar usuario:', error);
@@ -87,7 +95,7 @@ class UsuarioController {
                     message: 'No se puede eliminar a este usuario porque ha actuado como Encargado de almacén en transacciones pasadas. Se requiere preservar la auditoría.' 
                 });
             }
-            if (error.code === 'P2025') {
+            if (error.code === 'P2025' || error.message === 'NOT_FOUND') {
                 return res.status(404).json({ message: 'El usuario no existe.' });
             }
             

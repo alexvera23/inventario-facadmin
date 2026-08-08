@@ -3,40 +3,81 @@ const bcrypt = require('bcryptjs');
 const auditoriaService = require('./auditoriaService');
 
 class UsuarioService {
-    // 1. GET LIGERO: Lista de usuarios + Conteo del mes actual (Para la tabla)
-    async obtenerTodos() {
+    
+    //  MÉTODO MAESTRO: Obtener, Buscar, Filtrar por Rol y Paginar
+    async obtenerTodos({ page = 1, limit = 10, busqueda = '', rol = 'TODOS' }) {
+        const pageNum = parseInt(page, 10) || 1;
+        const limitNum = parseInt(limit, 10) || 10;
+        const skip = (pageNum - 1) * limitNum;
+
         const fechaInicioMes = new Date();
         fechaInicioMes.setDate(1);
         fechaInicioMes.setHours(0, 0, 0, 0);
 
-        const usuarios = await prisma.usuario.findMany({
-            include: {
-                _count: {
-                    select: {
-                        solicitudes: {
-                            where: { fecha: { gte: fechaInicioMes } }
+        // Construcción dinámica de la cláusula WHERE (Búsqueda)
+        const where = {};
+        
+        if (busqueda.trim()) {
+            where.OR = [
+                { nombre: { contains: busqueda, mode: 'insensitive' } },
+                { id_interno: { contains: busqueda, mode: 'insensitive' } },
+                { correo: { contains: busqueda, mode: 'insensitive' } }
+            ];
+        }
+
+        if (rol && rol !== 'TODOS') {
+            where.rol = rol.toUpperCase(); // Ej: 'ADMIN', 'SOLICITANTE'
+        }
+
+        // Ejecutamos el Count y el Fetch en paralelo
+        const [totalItems, usuarios] = await Promise.all([
+            prisma.usuario.count({ where }),
+            prisma.usuario.findMany({
+                where,
+                take: limitNum,
+                skip: skip,
+                orderBy: { nombre: 'asc' }, // Usa el índice de PostgreSQL
+                include: {
+                    _count: {
+                        select: {
+                            solicitudes: {
+                                where: { fecha: { gte: fechaInicioMes } }
+                            }
                         }
                     }
                 }
-            },
-            orderBy: { nombre: 'asc' }
-        });
+            })
+        ]);
 
-        return usuarios.map(u => ({
+        const totalPages = Math.ceil(totalItems / limitNum);
+
+        // Formateamos la respuesta del array
+        const usuariosFormateados = usuarios.map(u => ({
             id: u.id,
             id_interno: u.id_interno,
             nombre: u.nombre,
             correo: u.correo,
             departamento: u.departamento,
             rol: u.rol,
-            activo: true,
-            total_solicitudes: u._count.solicitudes // Solo mandamos el número entero
+            activo: u.activo,
+            total_solicitudes: u._count.solicitudes
         }));
+
+        return {
+            data: usuariosFormateados,
+            pagination: {
+                totalItems,
+                totalPages,
+                currentPage: pageNum,
+                limit: limitNum,
+                hasNextPage: pageNum < totalPages,
+                hasPrevPage: pageNum > 1
+            }
+        };
     }
 
-    // 2. GET DETALLADO: Toda la información de un usuario + Historial completo
+    // 2. GET DETALLADO (Permanece igual, pero optimizado)
     async obtenerPorId(id, periodo = 'siempre') {
-        // Lógica de fechas (Por si decides filtrar el historial en el frontend después)
         let whereClause = {}; 
         
         if (periodo !== 'siempre') {
@@ -53,8 +94,8 @@ class UsuarioService {
             where: { id: parseInt(id) },
             include: {
                 solicitudes: {
-                    where: whereClause, // Filtro de fechas (vacío si es 'siempre')
-                    orderBy: { fecha: 'desc' }, // Más recientes primero
+                    where: whereClause,
+                    orderBy: { fecha: 'desc' },
                     include: {
                         producto: {
                             select: { nombre: true, unidad_medida: true }
@@ -73,7 +114,7 @@ class UsuarioService {
             correo: usuario.correo,
             departamento: usuario.departamento,
             rol: usuario.rol,
-            activo: true,
+            activo: usuario.activo,
             total_solicitudes: usuario.solicitudes.length,
             historial_solicitudes: usuario.solicitudes.map(sol => ({
                 movimiento_id: sol.id,
@@ -87,17 +128,15 @@ class UsuarioService {
         };
     }
 
-    // POST: Crear usuario validando matrícula/ID único y encriptando contraseña
     async crear(datos, usuarioOperadorId) {
         try {
-            // 1. Preparamos el hash de la contraseña si es que el front la envió
             let passwordHash = null;
-            if (datos.password) {
+            if (datos.password || datos.contrasenia) {
+                const rawPass = datos.password || datos.contrasenia;
                 const salt = await bcrypt.genSalt(10);
-                passwordHash = await bcrypt.hash(datos.password, salt);
+                passwordHash = await bcrypt.hash(rawPass, salt);
             }
 
-            // 2. Guardamos en la base de datos
             const nuevoUsuario = await prisma.usuario.create({
                 data:{
                     id_interno: datos.id_interno,
@@ -118,7 +157,6 @@ class UsuarioService {
             return nuevoUsuario;
             
         } catch (error) {
-            // Prisma error P2002: Falla de restricción de campo único (Unique constraint)
             if (error.code === 'P2002') {
                 throw new Error('UNIQUE_CONSTRAINT');
             }
@@ -126,75 +164,63 @@ class UsuarioService {
         }
     }
 
-    // PUT: Actualizar información del usuario
-    async actualizar(id, datos,usuarioOperadorId) {
-        //obtenemos los datos antes de editarlos 
+    async actualizar(id, datos, usuarioOperadorId) {
         const usuarioAEditar = await prisma.usuario.findUnique({
             where: { id: parseInt(id)}
         });
-        if (!usuarioAEditar){
-            throw new Error('NOT_FOUND');
-        }
-        // 1. Armamos el objeto de datos básicos a actualizar
+        if (!usuarioAEditar) throw new Error('NOT_FOUND');
+        
         const dataToUpdate = {
-            id_interno: datos.id_interno, // Por si corrigen la matrícula
+            id_interno: datos.id_interno,
             nombre: datos.nombre,
             correo: datos.correo,
             departamento: datos.departamento,
             rol: datos.rol,
-            activo: datos.activo //  Añadimos el estado activo que configuramos en el frontend
+            activo: datos.activo
         };
 
-        // 2. Si el frontend nos mandó una nueva contraseña (no venía vacía)
-        // la encriptamos y la agregamos al objeto de actualización
-        if (datos.password) {
+        if (datos.password || datos.contrasenia) {
+            const rawPass = datos.password || datos.contrasenia;
             const salt = await bcrypt.genSalt(10);
-            dataToUpdate.password = await bcrypt.hash(datos.password, salt);
+            dataToUpdate.password = await bcrypt.hash(rawPass, salt);
         }
 
-        // 3. Ejecutamos el update en Prisma
         const usuarioEditado = await prisma.usuario.update({
             where: { id: parseInt(id) },
             data: dataToUpdate
         });
-        //Registro en la bitacora de auditoria 
+        
         await auditoriaService.registrar(
             usuarioOperadorId,
             'EDITAR',
             'USUARIO',
             parseInt(id),
-            `Se editó  al usuario: ${usuarioAEditar.nombre} (Matrícula: ${usuarioAEditar.id_interno}, Rol: ${usuarioAEditar.rol})` 
+            `Se editó al usuario: ${usuarioAEditar.nombre} (Matrícula: ${usuarioAEditar.id_interno}, Rol: ${usuarioAEditar.rol})` 
         );
         return usuarioEditado;
     }
 
-    // DELETE: Eliminar usuario
     async eliminar(id, usuarioOperadorId) {
         try {
-            //obtener datos antes de borarrlo para guardar para la auditoria
             const usuarioABorrar = await prisma.usuario.findUnique({
                 where: { id: parseInt(id) }
             });
-            if(!usuarioABorrar){
-                throw new Error('NOT_FOUND');
-            }
-            //eliminar en la base de datos 
+            if(!usuarioABorrar) throw new Error('NOT_FOUND');
+            
             const usuarioEliminado = await prisma.usuario.delete({
                 where: { id:parseInt(id) }
             });
 
-            //Registro en la bitacora de auditoria 
             await auditoriaService.registrar(
-                usuarioOperadorId,        // Quién lo hizo (ID del Admin firmado)
-                'ELIMINAR',               // Acción
-                'USUARIO',                // Entidad afectada
-                parseInt(id),             // ID de la entidad
-                `Se eliminó permanentemente al usuario: ${usuarioABorrar.nombre} (Matrícula: ${usuarioABorrar.id_interno}, Rol: ${usuarioABorrar.rol})` // Detalles libres
+                usuarioOperadorId,
+                'ELIMINAR',
+                'USUARIO',
+                parseInt(id),
+                `Se eliminó permanentemente al usuario: ${usuarioABorrar.nombre} (Matrícula: ${usuarioABorrar.id_interno}, Rol: ${usuarioABorrar.rol})`
             );
             return usuarioEliminado;
             
         } catch (error) {
-            // Prisma error P2003: Llave foránea restrictiva (Aplica para encargados)
             if (error.code === 'P2003') {
                 throw new Error('FOREIGN_KEY_CONSTRAINT');
             }
