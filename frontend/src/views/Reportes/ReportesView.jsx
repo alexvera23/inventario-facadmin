@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import ReportModal, { generarPDF, generarExcel } from '../Catalogo/ReportModal';
+import ReportModal, { generarPDF, generarExcel } from './ReportModal';
 import {
   Chart as ChartJS,
   CategoryScale,

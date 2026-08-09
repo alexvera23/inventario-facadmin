@@ -22,8 +22,12 @@ class ReporteService {
         return fecha;
     }
 
-    // Reporte 1: Reporte global agrupado por producto y tipo de movimiento
-    async obtenerReporteGeneral(periodo = 'semana', tipoFiltro = null) {
+    //  Reporte 1: Reporte global agrupado por producto y tipo con paginación y filtro por edificio
+    async obtenerReporteGeneral({ periodo = 'semana', tipoFiltro = null, edificio = 'TODOS', page = 1, limit = 10 }) {
+        const pageNum = parseInt(page, 10) || 1;
+        const limitNum = parseInt(limit, 10) || 10;
+        const skip = (pageNum - 1) * limitNum;
+
         const fechaInicio = this._calcularFechaInicio(periodo);
 
         const whereCondicion = {
@@ -34,101 +38,207 @@ class ReporteService {
             whereCondicion.tipo = tipoFiltro.toUpperCase();
         }
 
+        if (edificio && edificio !== 'TODOS') {
+            whereCondicion.edificio = edificio;
+        }
+
+        // 1. Agrupamiento en Prisma por producto y tipo
         const agrupacion = await prisma.movimiento.groupBy({
             by: ['producto_id', 'tipo'],
             _sum: { cantidad: true },
             where: whereCondicion
         });
 
-        if (agrupacion.length === 0) return [];
+        if (agrupacion.length === 0) {
+            return {
+                data: [],
+                pagination: { totalItems: 0, totalPages: 0, currentPage: pageNum, limit: limitNum, hasNextPage: false, hasPrevPage: false }
+            };
+        }
 
+        // 2. Traer nombres de productos involucrados aprovechando índices
         const productosIds = [...new Set(agrupacion.map(item => item.producto_id))];
         const productos = await prisma.producto.findMany({
             where: { id: { in: productosIds } },
-            select: { id: true, nombre: true, unidad_medida: true }
+            select: { id: true, nombre: true, unidad_medida: true, categoria: true }
         });
 
-        return agrupacion.map(item => {
+        // 3. Mapeo y formateo completo
+        const resultadoCompleto = agrupacion.map(item => {
             const detalleProducto = productos.find(p => p.id === item.producto_id);
             return {
                 producto_id: item.producto_id,
-                nombre: detalleProducto.nombre,
-                unidad: detalleProducto.unidad_medida,
+                nombre: detalleProducto ? detalleProducto.nombre : 'Producto Inexistente',
+                categoria: detalleProducto ? detalleProducto.categoria : 'General',
+                unidad: detalleProducto ? detalleProducto.unidad_medida : 'Pzas',
                 tipo_movimiento: item.tipo,
-                total_acumulado: item._sum.cantidad
+                total_acumulado: Number(item._sum.cantidad || 0)
             };
         });
+
+        // 4. Paginación en memoria del resultado consolidado
+        const totalItems = resultadoCompleto.length;
+        const totalPages = Math.ceil(totalItems / limitNum);
+        const dataPaginada = resultadoCompleto.slice(skip, skip + limitNum);
+
+        return {
+            data: dataPaginada,
+            pagination: {
+                totalItems,
+                totalPages,
+                currentPage: pageNum,
+                limit: limitNum,
+                hasNextPage: pageNum < totalPages,
+                hasPrevPage: pageNum > 1
+            }
+        };
     }
 
-    // Reporte 2: Auditoría de un usuario específico
-    async obtenerActividadUsuario(usuarioId, periodo = 'semana') {
+    //  Reporte 2: Auditoría de actividad de un usuario específico (Paginado)
+    async obtenerActividadUsuario(usuarioId, { periodo = 'semana', page = 1, limit = 10, edificio = 'TODOS' }) {
+        const pageNum = parseInt(page, 10) || 1;
+        const limitNum = parseInt(limit, 10) || 10;
+        const skip = (pageNum - 1) * limitNum;
+
         const fechaInicio = this._calcularFechaInicio(periodo);
 
-        return await prisma.movimiento.findMany({
-            where: {
-                fecha: { gte: fechaInicio },
-                OR: [
-                    { solicitante_id: parseInt(usuarioId) },
-                    { encargado_id: parseInt(usuarioId) }
-                ]
-            },
-            include: {
-                producto: { select: { nombre: true, unidad_medida: true } },
-                solicitante: { select: { nombre: true, departamento: true } },
-                encargado: { select: { nombre: true } }
-            },
-            orderBy: { fecha: 'desc' }
-        });
+        const where = {
+            fecha: { gte: fechaInicio },
+            OR: [
+                { solicitante_id: parseInt(usuarioId) },
+                { encargado_id: parseInt(usuarioId) }
+            ]
+        };
+
+        if (edificio && edificio !== 'TODOS') {
+            where.edificio = edificio;
+        }
+
+        const [totalItems, movimientos] = await Promise.all([
+            prisma.movimiento.count({ where }),
+            prisma.movimiento.findMany({
+                where,
+                take: limitNum,
+                skip: skip,
+                include: {
+                    producto: { select: { nombre: true, unidad_medida: true } },
+                    solicitante: { select: { nombre: true, departamento: true } },
+                    encargado: { select: { nombre: true } }
+                },
+                orderBy: { fecha: 'desc' } // Utiliza el índice de fecha desc
+            })
+        ]);
+
+        const totalPages = Math.ceil(totalItems / limitNum);
+
+        const dataFormateada = movimientos.map(mov => ({
+            id: mov.id,
+            tipo: mov.tipo,
+            cantidad: Number(mov.cantidad),
+            producto: mov.producto?.nombre || 'Insumo Eliminado',
+            unidad: mov.producto?.unidad_medida || 'Pzas',
+            edificio: mov.edificio,
+            fecha: mov.fecha,
+            observaciones: mov.observaciones || 'Sin observaciones',
+            solicitante: mov.solicitante?.nombre || 'N/A',
+            departamento: mov.solicitante?.departamento || 'General',
+            encargado: mov.encargado?.nombre || 'Almacén'
+        }));
+
+        return {
+            data: dataFormateada,
+            pagination: {
+                totalItems,
+                totalPages,
+                currentPage: pageNum,
+                limit: limitNum,
+                hasNextPage: pageNum < totalPages,
+                hasPrevPage: pageNum > 1
+            }
+        };
     }
 
-    // Reporte 3: Actividad y Movimientos de un Producto en específico
-    async obtenerActividadProducto(productoId, periodo = 'semana') {
+    //  Reporte 3: Actividad y Movimientos de un Producto en específico (Paginado + KPIs)
+    async obtenerActividadProducto(productoId, { periodo = 'semana', page = 1, limit = 10, edificio = 'TODOS' }) {
         const id = parseInt(productoId);
         if (isNaN(id)) throw new Error('El ID del producto debe ser un número válido');
 
+        const pageNum = parseInt(page, 10) || 1;
+        const limitNum = parseInt(limit, 10) || 10;
+        const skip = (pageNum - 1) * limitNum;
+
         const fechaInicio = this._calcularFechaInicio(periodo);
 
-        const movimientos = await prisma.movimiento.findMany({
-            where: {
-                producto_id: id,
-                fecha: { gte: fechaInicio }
-            },
-            include: {
-                solicitante: { select: { nombre: true, departamento: true } },
-                encargado: { select: { nombre: true } }
-            },
-            orderBy: { fecha: 'desc' }
-        });
+        const where = {
+            producto_id: id,
+            fecha: { gte: fechaInicio }
+        };
 
-        let totalEntradas = 0;
-        let totalSalidas = 0;
+        if (edificio && edificio !== 'TODOS') {
+            where.edificio = edificio;
+        }
 
-        const detalleFormateado = movimientos.map(mov => {
-            const cantidadNum = Number(mov.cantidad);
-            
-            if (mov.tipo === 'ENTRADA') totalEntradas += cantidadNum;
-            else if (mov.tipo === 'SALIDA') totalSalidas += cantidadNum;
+        // 1. Calculamos Totales (KPIs) usando agregación rápida en Prisma
+        const [agregadoEntradas, agregadoSalidas] = await Promise.all([
+            prisma.movimiento.aggregate({
+                _sum: { cantidad: true },
+                where: { ...where, tipo: 'ENTRADA' }
+            }),
+            prisma.movimiento.aggregate({
+                _sum: { cantidad: true },
+                where: { ...where, tipo: 'SALIDA' }
+            })
+        ]);
 
-            return {
-                id: mov.id,
-                tipo: mov.tipo,
-                cantidad: cantidadNum,
-                edificio: mov.edificio, // 🚀 Añadimos geolocalización al historial
-                fecha: mov.fecha,
-                observaciones: mov.observaciones,
-                involucrado: mov.tipo === 'ENTRADA' ? mov.encargado?.nombre : (mov.solicitante?.nombre || 'Desconocido'),
-                departamento: mov.solicitante?.departamento || 'Almacén'
-            };
-        });
+        const totalEntradas = Number(agregadoEntradas._sum.cantidad || 0);
+        const totalSalidas = Number(agregadoSalidas._sum.cantidad || 0);
+
+        // 2. Consulta Paginada del Historial
+        const [totalItems, movimientos] = await Promise.all([
+            prisma.movimiento.count({ where }),
+            prisma.movimiento.findMany({
+                where,
+                take: limitNum,
+                skip: skip,
+                include: {
+                    solicitante: { select: { nombre: true, departamento: true } },
+                    encargado: { select: { nombre: true } }
+                },
+                orderBy: { fecha: 'desc' }
+            })
+        ]);
+
+        const totalPages = Math.ceil(totalItems / limitNum);
+
+        const detalleFormateado = movimientos.map(mov => ({
+            id: mov.id,
+            tipo: mov.tipo,
+            cantidad: Number(mov.cantidad),
+            edificio: mov.edificio,
+            fecha: mov.fecha,
+            observaciones: mov.observaciones,
+            involucrado: mov.tipo === 'ENTRADA' ? mov.encargado?.nombre : (mov.solicitante?.nombre || 'Desconocido'),
+            departamento: mov.solicitante?.departamento || 'Almacén'
+        }));
 
         return {
             kpis: { entradas: totalEntradas, salidas: totalSalidas },
-            historial: detalleFormateado
+            historial: {
+                data: detalleFormateado,
+                pagination: {
+                    totalItems,
+                    totalPages,
+                    currentPage: pageNum,
+                    limit: limitNum,
+                    hasNextPage: pageNum < totalPages,
+                    hasPrevPage: pageNum > 1
+                }
+            }
         };
     }
     
-    // Reporte 4: Dashboard analítico general
-    async obtenerDashboard(mesAño = null) {
+    //  Reporte 4: Dashboard analítico general (Multi-sede y Optimización Native Prisma)
+    async obtenerDashboard(mesAño = null, edificio = 'TODOS') {
         const fechaInicio = new Date();
         const fechaFin = new Date();
         
@@ -141,10 +251,19 @@ class ReporteService {
             fechaFin.setHours(23, 59, 59, 999);
         } else {
             fechaInicio.setDate(1); 
+            fechaInicio.setHours(0, 0, 0, 0);
+        }
+
+        const whereMovimientos = {
+            fecha: { gte: fechaInicio, lte: fechaFin }
+        };
+
+        if (edificio && edificio !== 'TODOS') {
+            whereMovimientos.edificio = edificio;
         }
 
         const movimientos = await prisma.movimiento.findMany({
-            where: { fecha: { gte: fechaInicio, lte: fechaFin } },
+            where: whereMovimientos,
             include: { producto: true, solicitante: true }
         });
 
@@ -182,13 +301,20 @@ class ReporteService {
             }
         });
 
-        //  SOLUCIÓN AL CRASHEO: Consulta cruda ajustada al nuevo modelo multi-sede
-        // Cuenta cuántos productos únicos están en nivel crítico (en al menos 1 sede)
-        const criticos = await prisma.$queryRaw`
-            SELECT DISTINCT producto_id FROM stock_edificio
-            WHERE stock_actual <= stock_minimo
-        `;
-            
+        //  Conteo ultra rápido de productos críticos utilizando Prisma ORM nativo
+        const whereStockCritico = {
+            stock_actual: { lte: prisma.stockEdificio.fields.stock_minimo }
+        };
+
+        if (edificio && edificio !== 'TODOS') {
+            whereStockCritico.edificio = edificio;
+        }
+
+        const criticosGroup = await prisma.stockEdificio.groupBy({
+            by: ['producto_id'],
+            where: whereStockCritico
+        });
+
         const sortYCortar = (obj, limite = 5) => Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, limite);
         const topInsumosArray = sortYCortar(insumosMap);
         const topDeptosArray = sortYCortar(deptosMap);
@@ -197,7 +323,7 @@ class ReporteService {
             kpis: {
                 salidas: totalSalidas,
                 entradas: totalEntradas,
-                criticos: criticos.length, // 🚀 Número de insumos en alerta
+                criticos: criticosGroup.length, // Número de insumos únicos en alerta
                 usuariosActivos: usuariosUnicos.size
             },
             tendencia: {
