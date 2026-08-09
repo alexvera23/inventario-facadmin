@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import UserDrawer from './UserDrawer';
-import ReportModal from '../Catalogo/ReportModal';
+import ReportModal from '../Reportes/ReportModal';
 import { toastService } from '../../services/toastService';
 import api from '../../services/api';
 import UsuarioModal from '../../components/Modals/UsuarioModal';

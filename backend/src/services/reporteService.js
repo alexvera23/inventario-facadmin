@@ -3,24 +3,43 @@ const prisma = require('../config/db');
 class ReporteService {
     // Función auxiliar para calcular la fecha de inicio según el periodo
     _calcularFechaInicio(periodo) {
-        const fecha = new Date();
-        switch (periodo) {
-            case 'dia':
-                fecha.setDate(fecha.getDate() - 1);
-                break;
-            case 'mes':
-                fecha.setMonth(fecha.getMonth() - 1);
-                break;
-            case 'quincena':
-                fecha.setDate(fecha.getDate() - 15);
-                break;
-            case 'semana':
-            default:
-                fecha.setDate(fecha.getDate() - 7);
-                break;
-        }
-        return fecha;
+    const fechaInicio = new Date();
+    const fechaFin = new Date();
+
+    // 1. Si viene en formato mes calendario "MM-YYYY" (ej. "06-2026")
+    if (periodo && periodo.includes('-')) {
+        const [mes, año] = periodo.split('-');
+        const mesInt = parseInt(mes, 10) - 1;
+        const añoInt = parseInt(año, 10);
+
+        fechaInicio.setFullYear(añoInt, mesInt, 1);
+        fechaInicio.setHours(0, 0, 0, 0);
+
+        fechaFin.setFullYear(añoInt, mesInt + 1, 0); // Último día del mes
+        fechaFin.setHours(23, 59, 59, 999);
+
+        return { fechaInicio, fechaFin };
     }
+
+    // 2. Si viene como rango relativo ("dia", "semana", "quincena", "mes")
+    switch (periodo) {
+        case 'dia':
+            fechaInicio.setDate(fechaInicio.getDate() - 1);
+            break;
+        case 'quincena':
+            fechaInicio.setDate(fechaInicio.getDate() - 15);
+            break;
+        case 'mes':
+            fechaInicio.setMonth(fechaInicio.getMonth() - 1);
+            break;
+        case 'semana':
+        default:
+            fechaInicio.setDate(fechaInicio.getDate() - 7);
+            break;
+    }
+
+    return { fechaInicio, fechaFin: null }; // fechaFin null significa que va hasta el día de hoy
+}
 
     //  Reporte 1: Reporte global agrupado por producto y tipo con paginación y filtro por edificio
     async obtenerReporteGeneral({ periodo = 'semana', tipoFiltro = null, edificio = 'TODOS', page = 1, limit = 10 }) {
@@ -100,15 +119,15 @@ class ReporteService {
         const limitNum = parseInt(limit, 10) || 10;
         const skip = (pageNum - 1) * limitNum;
 
-        const fechaInicio = this._calcularFechaInicio(periodo);
+       const { fechaInicio, fechaFin } = this._calcularFechaInicio(periodo);
 
         const where = {
-            fecha: { gte: fechaInicio },
-            OR: [
-                { solicitante_id: parseInt(usuarioId) },
-                { encargado_id: parseInt(usuarioId) }
-            ]
-        };
+        fecha: fechaFin ? { gte: fechaInicio, lte: fechaFin } : { gte: fechaInicio },
+        OR: [
+            { solicitante_id: parseInt(usuarioId) },
+            { encargado_id: parseInt(usuarioId) }
+        ]
+    };
 
         if (edificio && edificio !== 'TODOS') {
             where.edificio = edificio;
@@ -167,11 +186,11 @@ class ReporteService {
         const limitNum = parseInt(limit, 10) || 10;
         const skip = (pageNum - 1) * limitNum;
 
-        const fechaInicio = this._calcularFechaInicio(periodo);
+        const { fechaInicio, fechaFin } = this._calcularFechaInicio(periodo);
 
         const where = {
             producto_id: id,
-            fecha: { gte: fechaInicio }
+            fecha: fechaFin ? { gte: fechaInicio, lte: fechaFin } : { gte: fechaInicio }
         };
 
         if (edificio && edificio !== 'TODOS') {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import DetailDrawer from './DetailDrawer';
-import ReportModal from './ReportModal';
+import ReportModal from '../Reportes/ReportModal';
 import api from '../../services/api';
 import InsumoModal from '../../components/Modals/InsumoModal';
 import EditInsumoModal from '../../components/Modals/EditInsumoModal';

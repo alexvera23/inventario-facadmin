@@ -34,14 +34,20 @@ export default function DetailDrawer({ isOpen, onClose, producto, onOpenReport, 
     setLoading(true);
     try {
       const response = await api.get(`/reportes/insumo/${producto.id}?periodo=semana`);
-      const { estadisticas, movimientos: movs } = response.data;
+      const { estadisticas, movimientos: movsData } = response.data;
       
       setKpis(estadisticas);
-      setMovimientos(movs);
       
-      // 🚀 Usamos el stock calculado desde la vista multi-sede
+      //  CORRECCIÓN: Extraemos el arreglo de movimientos desde .data si viene paginado
+      const listaMovimientos = Array.isArray(movsData) 
+        ? movsData 
+        : (movsData?.data || []);
+
+      setMovimientos(listaMovimientos);
+      
+      //  Usamos el stock calculado desde la vista multi-sede
       const stockActual = Number(producto.stockCalculado || producto.stock || 0);
-      generarDatosGrafica(movs, stockActual);
+      generarDatosGrafica(listaMovimientos, stockActual);
     } catch (error) {
       console.error('Error al obtener los detalles del insumo:', error);
     } finally {
@@ -53,6 +59,9 @@ export default function DetailDrawer({ isOpen, onClose, producto, onOpenReport, 
   // LÓGICA DE LA GRÁFICA (Curva de Stock de 7 días)
   // --------------------------------------------------------
   const generarDatosGrafica = (movs, stockActual) => {
+    // Protección por si movs no es un arreglo
+    const movsSeguros = Array.isArray(movs) ? movs : [];
+    
     const labels = [];
     const dataPoints = [];
     let stockSimulado = stockActual;
@@ -62,7 +71,9 @@ export default function DetailDrawer({ isOpen, onClose, producto, onOpenReport, 
       fecha.setDate(fecha.getDate() - i);
       labels.push(fecha.toLocaleDateString('es-MX', { weekday: 'short' })); 
 
-      const movsDelDia = movs.filter(m => new Date(m.fecha).toDateString() === fecha.toDateString());
+      const movsDelDia = movsSeguros.filter(
+        m => new Date(m.fecha).toDateString() === fecha.toDateString()
+      );
       
       let variacionNeta = 0;
       movsDelDia.forEach(m => {

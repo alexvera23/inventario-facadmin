@@ -936,65 +936,70 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
   }, [isOpen]);
 
   // ── Fetch de datos de preview ──────────────────────────────────────────
-  const fetchPreview = useCallback(async (page = 1) => {
-    if (scope !== 'global' && !subjectId) return;
-    setCargando(true);
-    setError(null);
-    if (page === 1) setPreviewData(null);
+  // ── Fetch de datos de preview Corregido ──────────────────────────────────
+const fetchPreview = useCallback(async (page = 1) => {
+  if (scope !== 'global' && !subjectId) return;
+  setCargando(true);
+  setError(null);
+  if (page === 1) setPreviewData(null);
 
-    try {
-      let res;
-      const edificioParam = sedeFiltro !== 'TODOS' ? `&edificio=${encodeURIComponent(sedeFiltro)}` : '';
+  try {
+    let res;
+    const edificioParam = sedeFiltro !== 'TODOS' ? `&edificio=${encodeURIComponent(sedeFiltro)}` : '';
 
-      if (scope === 'global') {
-        const mes = modoPeriodo === 'mes' ? mesSeleccionado : null;
-        const query = mes ? `?mes=${mes}${edificioParam}` : `?${edificioParam.slice(1)}`;
-        res = await api.get(`/reportes/dashboard${query}`);
-        // dashboard no está paginado, devuelve el objeto directo
-        setPreviewData({ tipo: 'global', data: res.data });
+    // 🚀 LÓGICA DE PERÍODO CORREGIDA:
+    // Si modoPeriodo es 'mes', mandamos la cadena del mes ("06-2026")
+    // Si es 'personalizado', mandamos la granularidad ("dia" | "semana" | "quincena" | "mes")
+    const periodoParam = modoPeriodo === 'mes' ? mesSeleccionado : (periodo || 'semana');
 
-      } else if (scope === 'insumo') {
-        const p = modoPeriodo === 'mes' ? 'mes' : (periodo || 'semana');
-        res = await api.get(`/reportes/insumo/${subjectId}?periodo=${p}&page=${page}&limit=${PREVIEW_LIMIT}${edificioParam}`);
-        // Estructura: { producto_id, filtro_aplicado, estadisticas: {}, movimientos: { data: [], pagination: {} } }
-        setPreviewData(prev => {
-          const nuevoHistorial = res.data.movimientos?.data ?? res.data.movimientos ?? [];
-          if (page === 1) {
-            return { tipo: 'insumo', data: res.data, historialAcumulado: nuevoHistorial, pagination: res.data.movimientos?.pagination ?? null };
-          }
-          return {
-            ...prev,
-            data: { ...prev.data, estadisticas: res.data.estadisticas },
-            historialAcumulado: [...(prev.historialAcumulado || []), ...nuevoHistorial],
-            pagination: res.data.movimientos?.pagination ?? null
-          };
-        });
+    if (scope === 'global') {
+      const mes = modoPeriodo === 'mes' ? mesSeleccionado : null;
+      const baseQ = mes ? `?mes=${mes}` : '?';
+      const sep   = mes ? '&' : '';
+      const q     = edificioParam ? `${baseQ}${sep}${edificioParam.slice(1)}` : (mes ? baseQ : '');
+      res = await api.get(`/reportes/dashboard${q}`);
+      setPreviewData({ tipo: 'global', data: res.data });
 
-      } else if (scope === 'usuario') {
-        const p = modoPeriodo === 'mes' ? 'mes' : (periodo || 'semana');
-        res = await api.get(`/reportes/usuario/${subjectId}?periodo=${p}&page=${page}&limit=${PREVIEW_LIMIT}${edificioParam}`);
-        // Estructura: { usuario_id, filtro_aplicado, data: [], pagination: {} }
-        const filas = res.data.data ?? res.data.datos ?? [];
-        const pag   = res.data.pagination ?? null;
-        setPreviewData(prev => {
-          if (page === 1) return { tipo: 'usuario', data: filas, pagination: pag };
-          return { ...prev, data: [...(prev.data || []), ...filas], pagination: pag };
-        });
+    } else if (scope === 'insumo') {
+      // 🚀 Ahora ?periodo= acepta tanto "06-2026" como "semana", "dia", etc.
+      res = await api.get(`/reportes/insumo/${subjectId}?periodo=${encodeURIComponent(periodoParam)}&page=${page}&limit=${PREVIEW_LIMIT}${edificioParam}`);
+      const nuevoHistorial = res.data.movimientos?.data ?? res.data.movimientos ?? [];
+      
+      setPreviewData(prev => {
+        if (page === 1) {
+          return { tipo: 'insumo', data: res.data, historialAcumulado: nuevoHistorial, pagination: res.data.movimientos?.pagination ?? null };
+        }
+        return {
+          ...prev,
+          data: { ...prev.data, estadisticas: res.data.estadisticas },
+          historialAcumulado: [...(prev.historialAcumulado || []), ...nuevoHistorial],
+          pagination: res.data.movimientos?.pagination ?? null
+        };
+      });
 
-      } else if (scope === 'inventario') {
-        // Sin paginación (inventario físico de un edificio, array plano)
-        res = await api.get(`/inventario/edificio/${encodeURIComponent(subjectId)}`);
-        setPreviewData({ tipo: 'inventario', data: res.data || [] });
-      }
+    } else if (scope === 'usuario') {
+      // 🚀 Enviar periodoParam corregido
+      res = await api.get(`/reportes/usuario/${subjectId}?periodo=${encodeURIComponent(periodoParam)}&page=${page}&limit=${PREVIEW_LIMIT}${edificioParam}`);
+      const filas = res.data.data ?? res.data.datos ?? [];
+      const pag   = res.data.pagination ?? null;
+      
+      setPreviewData(prev => {
+        if (page === 1) return { tipo: 'usuario', data: filas, pagination: pag };
+        return { ...prev, data: [...(prev.data || []), ...filas], pagination: pag };
+      });
 
-    } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Error al cargar los datos');
-      toastService.error('ERROR EN EL SERVIDOR');
-    } finally {
-      setCargando(false);
+    } else if (scope === 'inventario') {
+      res = await api.get(`/inventario/edificio/${encodeURIComponent(subjectId)}`);
+      setPreviewData({ tipo: 'inventario', data: res.data || [] });
     }
-  }, [scope, subjectId, mesSeleccionado, periodo, modoPeriodo, sedeFiltro]);
 
+  } catch (err) {
+    setError(err.response?.data?.message || err.message || 'Error al cargar los datos');
+    toastService.error('ERROR EN EL SERVIDOR');
+  } finally {
+    setCargando(false);
+  }
+}, [scope, subjectId, mesSeleccionado, periodo, modoPeriodo, sedeFiltro]);
   // Re-fetch al cambiar filtros (siempre desde página 1)
   useEffect(() => {
     if (isOpen) { setPreviewPage(1); fetchPreview(1); }
@@ -1148,16 +1153,16 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
 
       } else if (previewData.tipo === 'insumo') {
         // Re-fetch sin paginación para exportar todos los movimientos
-        const p = modoPeriodo === 'mes' ? 'mes' : (periodo || 'semana');
-        const full = await api.get(`/reportes/insumo/${subjectId}?periodo=${p}&limit=9999${edificioParam}`);
+        const periodoParam = modoPeriodo === 'mes' ? 'mes' : (periodo || 'semana');
+        const full = await api.get(`/reportes/insumo/${subjectId}?periodo=${periodoParam}&limit=9999${edificioParam}`);
         const historialCompleto = full.data.movimientos?.data ?? full.data.movimientos ?? [];
         kpis = full.data.estadisticas ?? full.data.kpis;
         data = { ...full.data, movimientos: historialCompleto, historial: historialCompleto };
 
       } else if (previewData.tipo === 'usuario') {
         // Re-fetch sin paginación
-        const p = modoPeriodo === 'mes' ? 'mes' : (periodo || 'semana');
-        const full = await api.get(`/reportes/usuario/${subjectId}?periodo=${p}&limit=9999${edificioParam}`);
+        const periodoParam = modoPeriodo === 'mes' ? 'mes' : (periodo || 'semana');
+        const full = await api.get(`/reportes/usuario/${subjectId}?periodo=${periodoParam}&limit=9999${edificioParam}`);
         data = full.data.data ?? full.data.datos ?? [];
         kpis = null;
 
@@ -1469,7 +1474,8 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
             </div>
 
             {/* Panel de Preview */}
-            <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 flex flex-col gap-5">
+            <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4">
+              <div className="flex flex-col gap-5 min-h-full">
 
               {cargando && (
                 <div className="flex-1 flex flex-col items-center justify-center gap-3 text-text-muted">
@@ -1860,8 +1866,9 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                   )}
                 </div>
               )}
-            </div>
-          </div>
+            </div>{/* end flex-col inner */}
+            </div>{/* end preview panel */}
+          </div>{/* end body container */}
 
           {/* ── FOOTER ─────────────────────────────────────────────────── */}
           <div className="p-3 sm:p-3.5 border-t border-border bg-card flex items-center justify-between gap-2 shrink-0 flex-wrap">
