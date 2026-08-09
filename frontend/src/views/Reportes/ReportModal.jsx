@@ -112,7 +112,34 @@ function KpiCard({ label, value, colorClass = 'text-text-primary', sub }) {
   );
 }
 
-// ─── Sección con título colapsable ────────────────────────────────────────
+// ─── Paginación de tablas en preview ──────────────────────────────────────
+function PaginationControls({ pagination, page, onPage, cargando }) {
+  if (!pagination || pagination.totalPages <= 1) return null;
+  const { totalItems, totalPages, hasNextPage, hasPrevPage } = pagination;
+  return (
+    <div className="flex items-center justify-between px-1 py-2 border-t border-border/50 text-xs text-text-muted flex-wrap gap-2">
+      <span>
+        Página <span className="font-semibold text-text-secondary">{page}</span> de{' '}
+        <span className="font-semibold text-text-secondary">{totalPages}</span>
+        {' · '}<span className="font-semibold text-text-secondary">{totalItems.toLocaleString('es-MX')}</span> registros totales
+      </span>
+      <div className="flex gap-1.5">
+        <button
+          onClick={() => onPage(page - 1)}
+          disabled={!hasPrevPage || cargando}
+          className="px-2.5 py-1 rounded-md bg-inputBg border border-border text-text-secondary hover:border-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-semibold"
+        >← Ant</button>
+        <button
+          onClick={() => onPage(page + 1)}
+          disabled={!hasNextPage || cargando}
+          className="px-2.5 py-1 rounded-md bg-inputBg border border-border text-text-secondary hover:border-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-semibold"
+        >Sig →</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Sección con título ────────────────────────────────────────────────────
 function Section({ title, children }) {
   return (
     <div className="flex flex-col gap-3">
@@ -841,7 +868,15 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
   const [edificioInput, setEdificioInput] = useState('');
   const buscarEdificio = () => setSubjectId(edificioInput.trim() || null);
 
-  // ── Panel de configuración en móvil: oculto por defecto, se abre con el botón hamburguesa ─
+  // ── Filtro de sede (aplica a scopes global / insumo / usuario, no a inventario) ──
+  const [sedeInput,   setSedeInput]   = useState('');    // texto mientras escribe
+  const [sedeFiltro,  setSedeFiltro]  = useState('TODOS'); // valor confirmado
+
+  // ── Paginación de tablas en preview ────────────────────────────────────
+  const [previewPage, setPreviewPage] = useState(1);
+  const PREVIEW_LIMIT = 20;
+
+  // ── Panel de configuración en móvil: oculto por defecto ─────────────────
   const [panelAbierto, setPanelAbierto] = useState(false);
 
   // ── Alertas de stock crítico (histórico global, independiente del alcance) ─
@@ -876,6 +911,9 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
       setScope(initialScope);
       setSubjectId(initialSubjectId);
       setEdificioInput(initialScope === 'inventario' && initialSubjectId ? String(initialSubjectId) : '');
+      setSedeInput('');
+      setSedeFiltro('TODOS');
+      setPreviewPage(1);
       setPreviewData(null);
       setError(null);
       setAlertasData(null);
@@ -893,47 +931,74 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
   // ── Cargar catálogos al montar ─────────────────────────────────────────
   useEffect(() => {
     if (!isOpen) return;
-    api.get('/productos?limite=200').then(r => setCatalogoProductos(r.data?.datos || r.data || [])).catch(() => {});
-    api.get('/usuarios?limite=200').then(r => setCatalogoUsuarios(r.data?.datos || r.data || [])).catch(() => {});
+    api.get('/productos?limit=200').then(r => setCatalogoProductos(r.data?.data || r.data?.datos || [])).catch(() => {});
+    api.get('/usuarios?limit=200').then(r => setCatalogoUsuarios(r.data?.data || r.data?.datos || [])).catch(() => {});
   }, [isOpen]);
 
   // ── Fetch de datos de preview ──────────────────────────────────────────
-  const fetchPreview = useCallback(async () => {
+  const fetchPreview = useCallback(async (page = 1) => {
     if (scope !== 'global' && !subjectId) return;
     setCargando(true);
     setError(null);
-    setPreviewData(null);
+    if (page === 1) setPreviewData(null);
 
     try {
       let res;
+      const edificioParam = sedeFiltro !== 'TODOS' ? `&edificio=${encodeURIComponent(sedeFiltro)}` : '';
+
       if (scope === 'global') {
         const mes = modoPeriodo === 'mes' ? mesSeleccionado : null;
-        const query = mes ? `?mes=${mes}` : '';
+        const query = mes ? `?mes=${mes}${edificioParam}` : `?${edificioParam.slice(1)}`;
         res = await api.get(`/reportes/dashboard${query}`);
+        // dashboard no está paginado, devuelve el objeto directo
         setPreviewData({ tipo: 'global', data: res.data });
+
       } else if (scope === 'insumo') {
         const p = modoPeriodo === 'mes' ? 'mes' : (periodo || 'semana');
-        res = await api.get(`/reportes/insumo/${subjectId}?periodo=${p}`);
-        setPreviewData({ tipo: 'insumo', data: res.data });
+        res = await api.get(`/reportes/insumo/${subjectId}?periodo=${p}&page=${page}&limit=${PREVIEW_LIMIT}${edificioParam}`);
+        // Estructura: { producto_id, filtro_aplicado, estadisticas: {}, movimientos: { data: [], pagination: {} } }
+        setPreviewData(prev => {
+          const nuevoHistorial = res.data.movimientos?.data ?? res.data.movimientos ?? [];
+          if (page === 1) {
+            return { tipo: 'insumo', data: res.data, historialAcumulado: nuevoHistorial, pagination: res.data.movimientos?.pagination ?? null };
+          }
+          return {
+            ...prev,
+            data: { ...prev.data, estadisticas: res.data.estadisticas },
+            historialAcumulado: [...(prev.historialAcumulado || []), ...nuevoHistorial],
+            pagination: res.data.movimientos?.pagination ?? null
+          };
+        });
+
       } else if (scope === 'usuario') {
         const p = modoPeriodo === 'mes' ? 'mes' : (periodo || 'semana');
-        res = await api.get(`/reportes/usuario/${subjectId}?periodo=${p}`);
-        setPreviewData({ tipo: 'usuario', data: res.data });
+        res = await api.get(`/reportes/usuario/${subjectId}?periodo=${p}&page=${page}&limit=${PREVIEW_LIMIT}${edificioParam}`);
+        // Estructura: { usuario_id, filtro_aplicado, data: [], pagination: {} }
+        const filas = res.data.data ?? res.data.datos ?? [];
+        const pag   = res.data.pagination ?? null;
+        setPreviewData(prev => {
+          if (page === 1) return { tipo: 'usuario', data: filas, pagination: pag };
+          return { ...prev, data: [...(prev.data || []), ...filas], pagination: pag };
+        });
+
       } else if (scope === 'inventario') {
+        // Sin paginación (inventario físico de un edificio, array plano)
         res = await api.get(`/inventario/edificio/${encodeURIComponent(subjectId)}`);
         setPreviewData({ tipo: 'inventario', data: res.data || [] });
       }
+
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Error al cargar los datos');
       toastService.error('ERROR EN EL SERVIDOR');
     } finally {
       setCargando(false);
     }
-  }, [scope, subjectId, mesSeleccionado, periodo, modoPeriodo]);
+  }, [scope, subjectId, mesSeleccionado, periodo, modoPeriodo, sedeFiltro]);
 
+  // Re-fetch al cambiar filtros (siempre desde página 1)
   useEffect(() => {
-    if (isOpen) fetchPreview();
-  }, [scope, subjectId, mesSeleccionado, periodo, modoPeriodo, isOpen, fetchPreview]);
+    if (isOpen) { setPreviewPage(1); fetchPreview(1); }
+  }, [scope, subjectId, mesSeleccionado, periodo, modoPeriodo, sedeFiltro, isOpen, fetchPreview]);
 
   // ── Helpers de label ───────────────────────────────────────────────────
   const labelMes = MESES.find(m => m.value === mesSeleccionado)?.label ?? mesSeleccionado;
@@ -956,9 +1021,15 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
   // ── Datos derivados para charts ────────────────────────────────────────
   const globalData    = previewData?.tipo === 'global'   ? previewData.data : null;
   const insumoData    = previewData?.tipo === 'insumo'   ? previewData.data : null;
-  const usuarioData   = previewData?.tipo === 'usuario'
-    ? (Array.isArray(previewData.data) ? previewData.data : (previewData.data?.datos ?? []))
-    : null;
+
+  // usuario: data es el array acumulado de movimientos
+  const usuarioData   = previewData?.tipo === 'usuario'  ? (previewData.data || []) : null;
+
+  // insumo: historial acumulado y paginación
+  const insumoMovimientos   = previewData?.tipo === 'insumo' ? (previewData.historialAcumulado || []) : [];
+  const insumoKpis          = insumoData?.estadisticas ?? insumoData?.kpis ?? null;
+  const previewPagination   = previewData?.pagination ?? null;
+
   const inventarioData = previewData?.tipo === 'inventario'
     ? (Array.isArray(previewData.data) ? previewData.data : [])
     : null;
@@ -987,7 +1058,6 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
     datasets: [{ label: 'Solicitudes', data: globalData.departamentos?.data || [], backgroundColor: PALETTE.emerald, borderRadius: 6 }]
   } : null;
 
-  const insumoMovimientos = insumoData?.movimientos ?? insumoData?.historial ?? [];
   const insumoChartData = insumoMovimientos.length > 0 ? (() => {
     const map = {};
     insumoMovimientos.forEach(m => {
@@ -1063,28 +1133,37 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
     stockMinimo: a.stock_minimo ?? null,
   }));
 
-  // ── Exportar ───────────────────────────────────────────────────────────
+  // ── Exportar — hace un segundo fetch sin límite para tener los datos completos ─
   const handleExportar = async (formato) => {
     if (!previewData) return;
     setGenerando(formato);
 
     try {
       let kpis, data;
+      const edificioParam = sedeFiltro !== 'TODOS' ? `&edificio=${encodeURIComponent(sedeFiltro)}` : '';
 
       if (previewData.tipo === 'global') {
         data = previewData.data;
         kpis = previewData.data?.kpis;
+
       } else if (previewData.tipo === 'insumo') {
-        data = previewData.data;
-        kpis = previewData.data?.estadisticas;
+        // Re-fetch sin paginación para exportar todos los movimientos
+        const p = modoPeriodo === 'mes' ? 'mes' : (periodo || 'semana');
+        const full = await api.get(`/reportes/insumo/${subjectId}?periodo=${p}&limit=9999${edificioParam}`);
+        const historialCompleto = full.data.movimientos?.data ?? full.data.movimientos ?? [];
+        kpis = full.data.estadisticas ?? full.data.kpis;
+        data = { ...full.data, movimientos: historialCompleto, historial: historialCompleto };
+
+      } else if (previewData.tipo === 'usuario') {
+        // Re-fetch sin paginación
+        const p = modoPeriodo === 'mes' ? 'mes' : (periodo || 'semana');
+        const full = await api.get(`/reportes/usuario/${subjectId}?periodo=${p}&limit=9999${edificioParam}`);
+        data = full.data.data ?? full.data.datos ?? [];
+        kpis = null;
+
       } else if (previewData.tipo === 'inventario') {
         data = inventarioData;
         kpis = inventarioKpis;
-      } else {
-        data = Array.isArray(previewData.data)
-          ? previewData.data
-          : (previewData.data?.datos ?? []);
-        kpis = null;
       }
 
       const alertas = incluir.alertas ? alertasFilas : [];
@@ -1092,16 +1171,10 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
       if (formato === 'excel') {
         await generarExcel({ scope, labelMes, kpis, data, labelScope, alertas, incluirAlertas: incluir.alertas });
       } else {
-        // Pasar los datasets calculados para que generarPDF los use en offscreen
         await generarPDF({
           scope, labelMes, kpis, data, labelScope, incluir,
-          lineChartData,
-          doughnutData,
-          topInsumosData,
-          deptosData,
-          insumoChartData,
-          usuarioChartData,
-          inventarioChartData,
+          lineChartData, doughnutData, topInsumosData, deptosData,
+          insumoChartData, usuarioChartData, inventarioChartData,
           alertas,
         });
       }
@@ -1260,6 +1333,52 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                   </div>
                   <p className="text-[0.65rem] text-text-muted mt-1.5">
                     Escribe el nombre exacto del edificio y presiona Enter o el botón de búsqueda.
+                  </p>
+                </Section>
+              )}
+
+              {/* Filtro de sede — aplica a global / insumo / usuario para filtrar movimientos por sede */}
+              {scope !== 'inventario' && (
+                <Section title="Sede / Edificio">
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={sedeInput}
+                      onChange={e => setSedeInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') { setSedeFiltro(sedeInput.trim() || 'TODOS'); }
+                      }}
+                      placeholder="TODOS o nombre de sede"
+                      className="flex-1 min-w-0 bg-inputBg border-[1.5px] border-border rounded-lg py-2 px-3 text-[0.82rem] text-text-primary outline-none focus:border-accent"
+                    />
+                    <button
+                      onClick={() => setSedeFiltro(sedeInput.trim() || 'TODOS')}
+                      className="px-3 py-2 bg-inputBg border border-border rounded-lg text-text-secondary hover:border-accent transition-colors"
+                      title="Aplicar filtro de sede"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/>
+                      </svg>
+                    </button>
+                  </div>
+                  {sedeFiltro !== 'TODOS' && (
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      <span className="flex-1 truncate text-[0.68rem] text-accent font-semibold bg-accent/10 border border-accent/30 rounded-md px-2 py-0.5">
+                        Filtrando: {sedeFiltro}
+                      </span>
+                      <button
+                        onClick={() => { setSedeInput(''); setSedeFiltro('TODOS'); }}
+                        className="text-text-muted hover:text-text-secondary transition-colors shrink-0"
+                        title="Quitar filtro"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                  <p className="text-[0.65rem] text-text-muted mt-1">
+                    Deja vacío para ver todas las sedes consolidadas.
                   </p>
                 </Section>
               )}
@@ -1487,8 +1606,8 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                     <>
                       {incluir.kpis && (
                         <div className="grid grid-cols-2 gap-3">
-                          <KpiCard label="Total Entradas" value={insumoData.estadisticas?.entradas?.toLocaleString('es-MX')} colorClass="text-emerald-400" sub="abastecidas" />
-                          <KpiCard label="Total Salidas"  value={insumoData.estadisticas?.salidas?.toLocaleString('es-MX')}  sub="consumidas" />
+                          <KpiCard label="Total Entradas" value={insumoKpis?.entradas?.toLocaleString('es-MX')} colorClass="text-emerald-400" sub="abastecidas" />
+                          <KpiCard label="Total Salidas"  value={insumoKpis?.salidas?.toLocaleString('es-MX')}  sub="consumidas" />
                         </div>
                       )}
 
@@ -1504,24 +1623,25 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                         </div>
                       )}
 
-                      {incluir.movimientos && insumoData.movimientos?.length > 0 && (
+                      {incluir.movimientos && insumoMovimientos.length > 0 && (
                         <div className="bg-card border border-border rounded-xl overflow-hidden">
-                          <div className="px-4 py-2.5 border-b border-border">
+                          <div className="px-4 py-2.5 border-b border-border flex items-center justify-between flex-wrap gap-2">
                             <p className="text-[0.7rem] font-heading font-bold uppercase tracking-wider text-text-muted">
-                              Historial · {insumoData.movimientos.length} registros
+                              Historial · {previewPagination?.totalItems?.toLocaleString('es-MX') ?? insumoMovimientos.length} registros
                             </p>
+                            {cargando && <Spinner className="w-3.5 h-3.5 text-accent" />}
                           </div>
-                          <div className="overflow-x-auto max-h-[220px] overflow-y-auto">
+                          <div className="overflow-x-auto">
                             <table className="w-full text-[0.78rem]">
                               <thead className="bg-inputBg sticky top-0">
                                 <tr>
-                                  {['Fecha', 'Tipo', 'Cant.', 'Involucrado', 'Depto.'].map(h => (
+                                  {['Fecha', 'Tipo', 'Cant.', 'Sede', 'Involucrado', 'Depto.'].map(h => (
                                     <th key={h} className="px-3 py-2 text-left text-[0.65rem] font-heading font-bold uppercase tracking-wide text-text-muted">{h}</th>
                                   ))}
                                 </tr>
                               </thead>
                               <tbody>
-                                {insumoData.movimientos.map((m, i) => (
+                                {insumoMovimientos.map((m, i) => (
                                   <tr key={m.id ?? i} className="border-t border-border/50 hover:bg-inputBg/50">
                                     <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{new Date(m.fecha).toLocaleDateString('es-MX')}</td>
                                     <td className="px-3 py-2">
@@ -1530,6 +1650,7 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                                       </span>
                                     </td>
                                     <td className="px-3 py-2 font-semibold text-text-primary">{m.cantidad}</td>
+                                    <td className="px-3 py-2 text-text-muted text-[0.72rem]">{m.edificio || '—'}</td>
                                     <td className="px-3 py-2 text-text-secondary">{m.involucrado || '—'}</td>
                                     <td className="px-3 py-2 text-text-muted">{m.departamento || '—'}</td>
                                   </tr>
@@ -1537,6 +1658,12 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                               </tbody>
                             </table>
                           </div>
+                          <PaginationControls
+                            pagination={previewPagination}
+                            page={previewPage}
+                            cargando={cargando}
+                            onPage={(p) => { setPreviewPage(p); fetchPreview(p); }}
+                          />
                         </div>
                       )}
                     </>
@@ -1547,9 +1674,9 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                     <>
                       {incluir.kpis && (
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <KpiCard label="Total Movimientos" value={usuarioData.length} sub="en el período" />
-                          <KpiCard label="Entradas"          value={usuarioData.filter(m => m.tipo === 'ENTRADA').length} colorClass="text-emerald-400" sub="procesadas" />
-                          <KpiCard label="Salidas / Pedidos" value={usuarioData.filter(m => m.tipo === 'SALIDA').length}  sub="solicitadas" />
+                          <KpiCard label="Total Movimientos" value={(previewPagination?.totalItems ?? usuarioData.length).toLocaleString('es-MX')} sub="en el período" />
+                          <KpiCard label="Entradas"          value={usuarioData.filter(m => m.tipo === 'ENTRADA').length} colorClass="text-emerald-400" sub="en esta página" />
+                          <KpiCard label="Salidas / Pedidos" value={usuarioData.filter(m => m.tipo === 'SALIDA').length}  sub="en esta página" />
                         </div>
                       )}
 
@@ -1567,16 +1694,17 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
 
                       {incluir.movimientos && usuarioData.length > 0 && (
                         <div className="bg-card border border-border rounded-xl overflow-hidden">
-                          <div className="px-4 py-2.5 border-b border-border">
+                          <div className="px-4 py-2.5 border-b border-border flex items-center justify-between flex-wrap gap-2">
                             <p className="text-[0.7rem] font-heading font-bold uppercase tracking-wider text-text-muted">
-                              Actividad · {usuarioData.length} registros
+                              Actividad · {(previewPagination?.totalItems ?? usuarioData.length).toLocaleString('es-MX')} registros
                             </p>
+                            {cargando && <Spinner className="w-3.5 h-3.5 text-accent" />}
                           </div>
-                          <div className="overflow-x-auto max-h-[220px] overflow-y-auto">
+                          <div className="overflow-x-auto">
                             <table className="w-full text-[0.78rem]">
                               <thead className="bg-inputBg sticky top-0">
                                 <tr>
-                                  {['Fecha', 'Tipo', 'Producto', 'Cant.', 'Depto.', 'Encargado'].map(h => (
+                                  {['Fecha', 'Tipo', 'Producto', 'Cant.', 'Sede', 'Depto.', 'Encargado'].map(h => (
                                     <th key={h} className="px-3 py-2 text-left text-[0.65rem] font-heading font-bold uppercase tracking-wide text-text-muted">{h}</th>
                                   ))}
                                 </tr>
@@ -1590,15 +1718,23 @@ export default function ReportModal({ isOpen, onClose, initialScope = 'global', 
                                         {m.tipo}
                                       </span>
                                     </td>
-                                    <td className="px-3 py-2 text-text-primary font-medium">{m.producto?.nombre || '—'}</td>
+                                    {/* reporteService ya formatea m.producto como string */}
+                                    <td className="px-3 py-2 text-text-primary font-medium">{m.producto ?? m.producto?.nombre ?? '—'}</td>
                                     <td className="px-3 py-2 font-semibold text-text-primary">{Number(m.cantidad)}</td>
-                                    <td className="px-3 py-2 text-text-muted">{m.solicitante?.departamento || '—'}</td>
-                                    <td className="px-3 py-2 text-text-secondary">{m.encargado?.nombre || '—'}</td>
+                                    <td className="px-3 py-2 text-text-muted text-[0.72rem]">{m.edificio || '—'}</td>
+                                    <td className="px-3 py-2 text-text-muted">{m.departamento ?? m.solicitante?.departamento ?? '—'}</td>
+                                    <td className="px-3 py-2 text-text-secondary">{m.encargado ?? m.encargado?.nombre ?? '—'}</td>
                                   </tr>
                                 ))}
                               </tbody>
                             </table>
                           </div>
+                          <PaginationControls
+                            pagination={previewPagination}
+                            page={previewPage}
+                            cargando={cargando}
+                            onPage={(p) => { setPreviewPage(p); fetchPreview(p); }}
+                          />
                         </div>
                       )}
                     </>
