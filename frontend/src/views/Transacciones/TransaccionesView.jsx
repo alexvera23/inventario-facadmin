@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../services/api';
 import EditTransaccionModal from '../../components/Modals/EditTransaccionModal';
 import PaginationControls from '../../components/PaginationControls';
+import TransaccionDrawer from './TransaccionesDrawer';
 
 const EDIFICIOS_DISPONIBLES = ['ADM1', 'ADM2', 'ADM3', 'ADM4', 'LAB_SISTEMAS', 'BODEGA_CENTRAL'];
 
@@ -17,15 +18,16 @@ export default function TransaccionesView() {
   const [limit, setLimit] = useState(10);
   const [paginationInfo, setPaginationInfo] = useState(null);
 
-  // ─── ESTADOS DE DATOS Y MODAL ───
+  // ─── ESTADOS DE DATOS, MODAL Y DRAWER ───
   const [movimientos, setMovimientos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedMovimiento, setSelectedMovimiento] = useState(null);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
-  //  LÓGICA DE DEBOUNCE (Retraso de 500ms)
+  // LÓGICA DE DEBOUNCE (Retraso de 500ms)
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedTerm(searchTerm);
@@ -35,7 +37,7 @@ export default function TransaccionesView() {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  //  FETCH PRINCIPAL CON PAGINACIÓN Y FILTROS
+  // FETCH PRINCIPAL CON PAGINACIÓN Y FILTROS
   const fetchMovimientos = useCallback(async () => {
     try {
       setLoading(true);
@@ -75,13 +77,23 @@ export default function TransaccionesView() {
     setPage(1);
   };
 
+  const handleRowClick = (movimiento) => {
+    setSelectedMovimiento(movimiento);
+    setIsDrawerOpen(true);
+  };
+
   return (
     <div className="flex flex-col h-full animate-fade-in pb-4">
       
       {/* Header */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-6 gap-4">
         <div>
-          <h2 className="text-2xl font-heading font-bold text-text-primary">Historial de Transacciones</h2>
+          <div className="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+            </svg>
+            <h2 className="text-2xl font-heading font-bold text-text-primary">Historial de Transacciones</h2>
+          </div>
           <p className="text-text-muted text-sm mt-1">Gestión, auditoría y corrección de entradas y salidas de almacén</p>
         </div>
         
@@ -108,9 +120,9 @@ export default function TransaccionesView() {
             }}
             className="bg-inputBg border-[1.5px] border-border rounded-lg py-2 px-3 text-xs font-semibold text-text-primary outline-none focus:border-accent"
           >
-            <option value="TODOS"> Todos los Tipos</option>
-            <option value="ENTRADA"> Entradas</option>
-            <option value="SALIDA"> Salidas</option>
+            <option value="TODOS">Todos los Tipos</option>
+            <option value="ENTRADA">Entradas</option>
+            <option value="SALIDA">Salidas</option>
           </select>
 
           {/* Filtro por Edificio */}
@@ -124,7 +136,7 @@ export default function TransaccionesView() {
           >
             <option value="TODOS">Todas las Sedes</option>
             {EDIFICIOS_DISPONIBLES.map(edif => (
-              <option key={edif} value={edif}> {edif}</option>
+              <option key={edif} value={edif}>{edif}</option>
             ))}
           </select>
 
@@ -178,7 +190,11 @@ export default function TransaccionesView() {
                   </tr>
                 ) : (
                   movimientos.map((m) => (
-                    <tr key={m.id} className="hover:bg-tableHover transition-colors group">
+                    <tr 
+                      key={m.id} 
+                      onClick={() => handleRowClick(m)} 
+                      className="hover:bg-tableHover cursor-pointer transition-colors group"
+                    >
                       <td className="p-4">
                         <p className="font-bold text-text-primary text-sm font-mono">#{m.id}</p>
                         <p className="text-[0.7rem] text-text-muted">
@@ -214,7 +230,7 @@ export default function TransaccionesView() {
                           </p>
                         )}
                       </td>
-                      <td className="p-4 text-center">
+                      <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
                         <button 
                           onClick={() => handleOpenEdit(m)}
                           className="px-3 py-1.5 bg-inputBg border border-border text-text-secondary hover:text-accent hover:border-accent rounded-lg text-xs font-bold transition-colors"
@@ -229,7 +245,7 @@ export default function TransaccionesView() {
             </table>
           </div>
 
-          {/*  COMPONENTE DE PAGINACIÓN */}
+          {/* COMPONENTE DE PAGINACIÓN */}
           <PaginationControls 
             pagination={paginationInfo}
             onPageChange={(nuevaPag) => setPage(nuevaPag)}
@@ -238,6 +254,14 @@ export default function TransaccionesView() {
 
         </div>
       )}
+
+      {/* Instancia del Drawer */}
+      <TransaccionDrawer
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        transaccion={selectedMovimiento}
+        onOpenEdit={handleOpenEdit}
+      />
 
       {/* Modal de edición */}
       <EditTransaccionModal 

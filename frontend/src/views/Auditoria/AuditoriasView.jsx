@@ -79,10 +79,15 @@ export default function AuditoriasView() {
 
   return (
     <div className="flex flex-col h-full animate-fade-in pb-4">
-      {/* Encabezado */}
+      {/* Header de la seccion */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
         <div>
-          <h2 className="text-2xl font-heading font-black text-text-primary tracking-tight">Bitácora de Seguridad</h2>
+          <div className="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+              <path fill-rule="evenodd" d="M12.516 2.17a.75.75 0 0 0-1.032 0 11.209 11.209 0 0 1-7.877 3.08.75.75 0 0 0-.722.515A12.74 12.74 0 0 0 2.25 9.75c0 5.942 4.064 10.933 9.563 12.348a.749.749 0 0 0 .374 0c5.499-1.415 9.563-6.406 9.563-12.348 0-1.39-.223-2.73-.635-3.985a.75.75 0 0 0-.722-.516l-.143.001c-2.996 0-5.717-1.17-7.734-3.08Zm3.094 8.016a.75.75 0 1 0-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 0 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.14-.094l3.75-5.25Z" clip-rule="evenodd" />
+            </svg>
+            <h2 className="text-2xl font-heading font-black text-text-primary tracking-tight">Bitácora de Seguridad</h2>
+          </div>
           <p className="text-sm text-text-muted mt-1">Registro inmutable de actividades administrativas del sistema</p>
         </div>
         
@@ -96,25 +101,6 @@ export default function AuditoriasView() {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="bg-inputBg border-[1.5px] border-border rounded-lg py-2 px-4 text-xs text-text-primary outline-none focus:border-accent min-w-[220px] transition-all"
           />
-
-          {/* <div className="flex bg-inputBg p-1 border border-border rounded-lg">
-            {['TODAS', 'CREAR', 'EDITAR', 'ELIMINAR'].map((tipo) => (
-              <button
-                key={tipo}
-                onClick={() => {
-                  setFiltroAccion(tipo);
-                  setPage(1);
-                }}
-                className={`px-3 py-1.5 text-[0.7rem] font-heading font-bold rounded-md transition-colors ${
-                  filtroAccion === tipo 
-                    ? 'bg-card shadow-sm text-text-primary' 
-                    : 'text-text-muted hover:text-text-primary'
-                }`}
-              >
-                {tipo}
-              </button>
-            ))}
-          </div> */}
           {/* FIltro por accion */}
           <select
             value={filtroAccion}
