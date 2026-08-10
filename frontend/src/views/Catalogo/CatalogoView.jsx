@@ -159,9 +159,9 @@ export default function CatalogoView() {
             }}
             className="bg-inputBg border-[1.5px] border-border rounded-lg py-2 px-3 text-sm font-semibold text-text-primary outline-none focus:border-accent"
           >
-            <option value="TODOS">🌐 Stock Global (Todas las Sedes)</option>
+            <option value="TODOS"> Stock Global (Todas las Sedes)</option>
             {EDIFICIOS_DISPONIBLES.map(edif => (
-              <option key={edif} value={edif}>🏢 {edif}</option>
+              <option key={edif} value={edif}> {edif}</option>
             ))}
           </select>
 

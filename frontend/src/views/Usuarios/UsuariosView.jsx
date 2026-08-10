@@ -149,10 +149,10 @@ export default function UsuariosView() {
             }}
             className="bg-inputBg border-[1.5px] border-border rounded-lg py-2 px-3 text-sm font-semibold text-text-primary outline-none focus:border-accent"
           >
-            <option value="TODOS">👥 Todos los Roles</option>
-            <option value="SOLICITANTE">👤 Solicitantes</option>
-            <option value="ENCARGADO">📦 Encargados</option>
-            <option value="ADMIN">🛡️ Administradores</option>
+            <option value="TODOS"> Todos los Roles</option>
+            <option value="SOLICITANTE"> Solicitantes</option>
+            <option value="ENCARGADO"> Encargados</option>
+            <option value="ADMIN"> Administradores</option>
           </select>
 
           {/* Búsqueda por texto con Debounce */}

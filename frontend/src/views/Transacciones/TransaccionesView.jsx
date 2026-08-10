@@ -108,9 +108,9 @@ export default function TransaccionesView() {
             }}
             className="bg-inputBg border-[1.5px] border-border rounded-lg py-2 px-3 text-xs font-semibold text-text-primary outline-none focus:border-accent"
           >
-            <option value="TODOS">🔃 Todos los Tipos</option>
-            <option value="ENTRADA">📥 Entradas</option>
-            <option value="SALIDA">📤 Salidas</option>
+            <option value="TODOS"> Todos los Tipos</option>
+            <option value="ENTRADA"> Entradas</option>
+            <option value="SALIDA"> Salidas</option>
           </select>
 
           {/* Filtro por Edificio */}
@@ -122,9 +122,9 @@ export default function TransaccionesView() {
             }}
             className="bg-inputBg border-[1.5px] border-border rounded-lg py-2 px-3 text-xs font-semibold text-text-primary outline-none focus:border-accent"
           >
-            <option value="TODOS">🌐 Todas las Sedes</option>
+            <option value="TODOS">Todas las Sedes</option>
             {EDIFICIOS_DISPONIBLES.map(edif => (
-              <option key={edif} value={edif}>🏢 {edif}</option>
+              <option key={edif} value={edif}> {edif}</option>
             ))}
           </select>
 
@@ -191,7 +191,7 @@ export default function TransaccionesView() {
                             {m.tipo}
                           </span>
                           <span className="text-[0.7rem] font-mono font-semibold text-text-muted">
-                            🏢 {m.edificio}
+                             {m.edificio}
                           </span>
                         </div>
                       </td>

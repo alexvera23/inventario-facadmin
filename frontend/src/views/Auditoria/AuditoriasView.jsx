@@ -6,7 +6,7 @@ export default function AuditoriasView() {
   // ─── ESTADOS DE BÚSQUEDA Y FILTROS ───
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedTerm, setDebouncedTerm] = useState('');
-  const [filtroAccion, setFiltroAccion] = useState('TODOS'); // TODOS, CREAR, ACTUALIZAR, EDITAR, ELIMINAR
+  const [filtroAccion, setFiltroAccion] = useState('TODAS'); // TODOS, CREAR, ACTUALIZAR, EDITAR, ELIMINAR
 
   // ─── ESTADOS DE PAGINACIÓN ───
   const [page, setPage] = useState(1);
@@ -97,8 +97,8 @@ export default function AuditoriasView() {
             className="bg-inputBg border-[1.5px] border-border rounded-lg py-2 px-4 text-xs text-text-primary outline-none focus:border-accent min-w-[220px] transition-all"
           />
 
-          <div className="flex bg-inputBg p-1 border border-border rounded-lg">
-            {['TODOS', 'CREAR', 'EDITAR', 'ELIMINAR'].map((tipo) => (
+          {/* <div className="flex bg-inputBg p-1 border border-border rounded-lg">
+            {['TODAS', 'CREAR', 'EDITAR', 'ELIMINAR'].map((tipo) => (
               <button
                 key={tipo}
                 onClick={() => {
@@ -114,7 +114,24 @@ export default function AuditoriasView() {
                 {tipo}
               </button>
             ))}
-          </div>
+          </div> */}
+          {/* FIltro por accion */}
+          <select
+            value={filtroAccion}
+            onChange={(e)=>{
+              setFiltroAccion(e.target.value);
+              setPage(1);
+            }}  
+            className="bg-inputBg border-[1.5px] border-border rounded-lg py-2 px-3 text-sm font-semibold text-text-primary outline-none focus:border-accent"
+          >
+            <option value="TODAS">Todos los tipos</option>
+            <option value="CREAR">Crear</option>
+            <option value="ACTUALIZAR">Actualizar</option>
+            <option value="EDITAR">Editar</option>
+            <option value="ELIMINAR">Eliminar</option>
+          </select>
+
+         
 
           <button 
             onClick={fetchAuditorias}

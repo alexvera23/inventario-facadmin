@@ -49,7 +49,7 @@ export default function VentanillaView() {
         api.get('/productos', { params: { limit: 100 } })
       ]);
 
-      // 🚀 CORRECCIÓN: Extraemos el arreglo .data del objeto paginado
+      //  CORRECCIÓN: Extraemos el arreglo .data del objeto paginado
       setUsuarios(resUsuarios.data?.data || resUsuarios.data || []);
       setInsumos(resProductos.data?.data || resProductos.data || []);
     } catch (error) {
@@ -214,7 +214,7 @@ export default function VentanillaView() {
       {/* Grid Principal sin Scroll Global en el Panel Izquierdo */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-0 overflow-hidden">
         
-        {/* 🚀 PANEL IZQUIERDO: Estructura fija (sin scroll externo) */}
+        {/*  PANEL IZQUIERDO: Estructura fija (sin scroll externo) */}
         <div className="lg:col-span-7 flex flex-col gap-4 min-h-0 overflow-hidden">
           
           {/* Paso 1: Solicitante Dinámico (Tamaño Fijo) */}
@@ -270,7 +270,7 @@ export default function VentanillaView() {
             )}
           </div>
 
-          {/* 🚀 Paso 2: Insumos con Scroll EXCLUSIVO en la lista */}
+          {/*  Paso 2: Insumos con Scroll EXCLUSIVO en la lista */}
           <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex-1 min-h-0 flex flex-col overflow-hidden">
             <h3 className="font-heading font-bold text-xs uppercase text-text-muted tracking-wider mb-3 flex-shrink-0">
               2. Catálogo de Insumos
@@ -332,7 +332,7 @@ export default function VentanillaView() {
               </div>
             )}
 
-            {/* 🚀 LISTA DE INSUMOS CON SCROLL ÚNICO */}
+            {/*  LISTA DE INSUMOS CON SCROLL ÚNICO */}
             <div className="space-y-2 overflow-y-auto min-h-0 flex-1 pr-1 border-t border-border/40 pt-2">
               {loadingData ? (
                 <div className="p-4 text-center text-text-muted text-xs animate-pulse">Cargando catálogo...</div>
