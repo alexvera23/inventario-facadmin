@@ -3,6 +3,8 @@ import api from '../../services/api';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
 import { useAuth } from '../../context/AuthContext'; //  1. Importamos el contexto
+import UsuarioHistorialModal from '../../components/Modals/UsuarioHistorialModal';
+import InsumoHistorialModal from '../../components/Modals/InsumoHistoriaModal';
 
 // Registro de los componentes de la gráfica de Barras
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
@@ -32,6 +34,10 @@ export default function UserDrawer({ isOpen, onClose, usuario, onOpenReport, onO
   const [loading, setLoading] = useState(false);
   const [detalleUsuario, setDetalleUsuario] = useState(null);
   const [chartData, setChartData] = useState(null);
+
+  // Estados para el modal del historial 
+  
+  const[isHistorialModalOpen, setIsHistorialModalOpen] = useState(false);
 
   // Consultar historial al abrir el Drawer
   useEffect(() => {
@@ -257,7 +263,8 @@ export default function UserDrawer({ isOpen, onClose, usuario, onOpenReport, onO
               </button>
             )}
 
-            <button className="bg-text-primary text-app hover:opacity-85 rounded-lg font-heading font-semibold text-[0.75rem] py-2 transition-opacity dark:bg-accent dark:text-[#002D4C]">
+            <button 
+              onClick={()=> setIsHistorialModalOpen(true)} className="bg-text-primary text-app hover:opacity-85 rounded-lg font-heading font-semibold text-[0.75rem] py-2 transition-opacity dark:bg-accent dark:text-[#002D4C]">
               Ver historial
             </button>
           </div>
@@ -272,6 +279,12 @@ export default function UserDrawer({ isOpen, onClose, usuario, onOpenReport, onO
         </div>
 
       </aside>
+      {/* Modal historial completo */}
+      <UsuarioHistorialModal
+        isOpen={isHistorialModalOpen}
+        onClose={()=> setIsHistorialModalOpen(false)}
+        usuario={usuario}
+        />
     </>
   );
 }
