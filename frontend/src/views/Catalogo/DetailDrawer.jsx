@@ -4,6 +4,7 @@ import api from '../../services/api';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Filler } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import { useAuth } from '../../context/AuthContext';
+import InsumoHistorialModal from '../../components/Modals/InsumoHistoriaModal';
 
 // Registro de los componentes de la gráfica
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Filler);
@@ -19,6 +20,8 @@ export default function DetailDrawer({ isOpen, onClose, producto, onOpenReport, 
   const [kpis, setKpis] = useState({ entradas: 0, salidas: 0 });
   const [movimientos, setMovimientos] = useState([]);
   const [chartData, setChartData] = useState(null);
+
+  const [isHistorialModalOpen, setIsHistorialModalOpen] = useState(false);
 
   // Ejecutar la consulta cada vez que se abre el Drawer con un producto válido
   useEffect(() => {
@@ -255,7 +258,8 @@ export default function DetailDrawer({ isOpen, onClose, producto, onOpenReport, 
               Ajuste manual
             </button>
             )}
-            <button className="bg-inputBg border border-border text-text-primary hover:border-accent rounded-lg font-heading font-semibold text-[0.75rem] py-2 transition-colors">Ver historial</button>
+            <button
+              onClick={()=> setIsHistorialModalOpen(true)} className="bg-inputBg border border-border text-text-primary hover:border-accent rounded-lg font-heading font-semibold text-[0.75rem] py-2 transition-colors">Ver historial</button>
             <button className="bg-accent text-white hover:opacity-90 rounded-lg font-heading font-semibold text-[0.75rem] py-2 transition-colors">Abastecer</button>
           </div>
           <button 
@@ -267,6 +271,12 @@ export default function DetailDrawer({ isOpen, onClose, producto, onOpenReport, 
           </button>
         </div>
       </aside>
+      {/* Modal Historial completo  */}
+      <InsumoHistorialModal
+        isOpen={isHistorialModalOpen}
+        onClose={()=> setIsHistorialModalOpen(false)}
+        producto={producto}
+        />
     </>
   );
 }
