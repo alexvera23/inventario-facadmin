@@ -35,7 +35,8 @@ const verificarCredenciales = async (id_interno, password) => {
     id_interno: usuario.id_interno,
     nombre: usuario.nombre,
     rol: usuario.rol,
-    departamento: usuario.departamento
+    departamento: usuario.departamento,
+    correo: usuario.correo
   };
 
   // 5. Firmar el Token (Expiración de 8 horas)

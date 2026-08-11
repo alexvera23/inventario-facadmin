@@ -255,7 +255,7 @@ export default function DetailDrawer({ isOpen, onClose, producto, onOpenReport, 
               Ajuste manual
             </button>
             )}
-            <button className="bg-inputBg border border-border text-text-primary hover:border-accent rounded-lg font-heading font-semibold text-[0.75rem] py-2 transition-colors">Emergencia</button>
+            <button className="bg-inputBg border border-border text-text-primary hover:border-accent rounded-lg font-heading font-semibold text-[0.75rem] py-2 transition-colors">Ver historial</button>
             <button className="bg-accent text-white hover:opacity-90 rounded-lg font-heading font-semibold text-[0.75rem] py-2 transition-colors">Abastecer</button>
           </div>
           <button 

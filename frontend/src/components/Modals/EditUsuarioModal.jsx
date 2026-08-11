@@ -25,7 +25,7 @@ export default function EditUsuarioModal({ isOpen, onClose, usuario, onSuccess }
         correo: usuario.correo || '',
         departamento: usuario.departamento || '',
         rol: usuario.rol || 'SOLICITANTE',
-        password: '', // 🚀 BLINDAJE: Siempre inicia vacío para no sobreescribir por accidente
+        password: '', //  BLINDAJE: Siempre inicia vacío para no sobreescribir por accidente
         activo: usuario.activo ?? true
       });
     }
@@ -45,7 +45,7 @@ export default function EditUsuarioModal({ isOpen, onClose, usuario, onSuccess }
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      // 🚀 BLINDAJE: Solo enviamos la contraseña si el usuario escribió algo nuevo
+      //  BLINDAJE: Solo enviamos la contraseña si el usuario escribió algo nuevo
       const payload = { ...formData };
       if (!payload.password || payload.password.trim() === '') {
         delete payload.password;
@@ -146,7 +146,7 @@ export default function EditUsuarioModal({ isOpen, onClose, usuario, onSuccess }
             />
           </div>
 
-          {/* 🚀 BLINDAJE: Renderizado condicional de la contraseña */}
+          {/*  BLINDAJE: Renderizado condicional de la contraseña */}
           {(formData.rol === 'ADMIN' || formData.rol === 'ENCARGADO') && (
             <div>
               <label className="block text-[0.7rem] font-heading font-bold uppercase text-text-muted mb-1.5">

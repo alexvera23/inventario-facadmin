@@ -170,7 +170,7 @@ export default function UserDrawer({ isOpen, onClose, usuario, onOpenReport, onO
             </div>
             <div>
               <p className="font-heading font-extrabold text-[1.1rem] text-text-primary">{usuario.nombre}</p>
-              <p className="text-[0.8rem] text-text-muted">{usuario.departamento} · {usuario.edificio}</p>
+              <p className="text-[0.8rem] text-text-muted">{usuario.departamento} · {usuario.correo}</p>
               <span className={`inline-block mt-1.5 px-2.5 py-0.5 rounded-full text-[0.65rem] font-bold font-heading uppercase ${usuario.activo ? 'bg-green-500/10 text-green-600' : 'bg-red-500/10 text-red-500'}`}>
                 {usuario.activo ? 'Activo' : 'Inactivo'}
               </span>
