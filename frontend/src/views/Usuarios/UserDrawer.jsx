@@ -3,6 +3,8 @@ import api from '../../services/api';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
 import { useAuth } from '../../context/AuthContext'; //  1. Importamos el contexto
+import UsuarioHistorialModal from '../../components/Modals/UsuarioHistorialModal';
+import InsumoHistorialModal from '../../components/Modals/InsumoHistoriaModal';
 
 // Registro de los componentes de la gráfica de Barras
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
@@ -32,6 +34,10 @@ export default function UserDrawer({ isOpen, onClose, usuario, onOpenReport, onO
   const [loading, setLoading] = useState(false);
   const [detalleUsuario, setDetalleUsuario] = useState(null);
   const [chartData, setChartData] = useState(null);
+
+  // Estados para el modal del historial 
+  
+  const[isHistorialModalOpen, setIsHistorialModalOpen] = useState(false);
 
   // Consultar historial al abrir el Drawer
   useEffect(() => {
@@ -147,9 +153,14 @@ export default function UserDrawer({ isOpen, onClose, usuario, onOpenReport, onO
         
         {/* Header */}
         <div className="py-[18px] px-5 border-b border-border bg-app flex items-center justify-between">
-          <h3 className="font-heading font-extrabold text-[1rem] text-text-primary">
-            Detalle de Usuario
-          </h3>
+          <div className="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" />
+            </svg>
+            <h3 className="font-heading font-extrabold text-[1rem] text-text-primary">
+              Detalle de Usuario
+            </h3>
+          </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-inputBg text-text-secondary transition-colors">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
           </button>
@@ -165,7 +176,7 @@ export default function UserDrawer({ isOpen, onClose, usuario, onOpenReport, onO
             </div>
             <div>
               <p className="font-heading font-extrabold text-[1.1rem] text-text-primary">{usuario.nombre}</p>
-              <p className="text-[0.8rem] text-text-muted">{usuario.departamento} · {usuario.edificio}</p>
+              <p className="text-[0.8rem] text-text-muted">{usuario.departamento} · {usuario.correo}</p>
               <span className={`inline-block mt-1.5 px-2.5 py-0.5 rounded-full text-[0.65rem] font-bold font-heading uppercase ${usuario.activo ? 'bg-green-500/10 text-green-600' : 'bg-red-500/10 text-red-500'}`}>
                 {usuario.activo ? 'Activo' : 'Inactivo'}
               </span>
@@ -252,7 +263,8 @@ export default function UserDrawer({ isOpen, onClose, usuario, onOpenReport, onO
               </button>
             )}
 
-            <button className="bg-text-primary text-app hover:opacity-85 rounded-lg font-heading font-semibold text-[0.75rem] py-2 transition-opacity dark:bg-accent dark:text-[#002D4C]">
+            <button 
+              onClick={()=> setIsHistorialModalOpen(true)} className="bg-text-primary text-app hover:opacity-85 rounded-lg font-heading font-semibold text-[0.75rem] py-2 transition-opacity dark:bg-accent dark:text-[#002D4C]">
               Ver historial
             </button>
           </div>
@@ -267,6 +279,12 @@ export default function UserDrawer({ isOpen, onClose, usuario, onOpenReport, onO
         </div>
 
       </aside>
+      {/* Modal historial completo */}
+      <UsuarioHistorialModal
+        isOpen={isHistorialModalOpen}
+        onClose={()=> setIsHistorialModalOpen(false)}
+        usuario={usuario}
+        />
     </>
   );
 }
