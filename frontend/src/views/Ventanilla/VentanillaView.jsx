@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
-import { toastService } from '../../services/toastService'; // Ajusta la ruta de tu toast si es distinta
+import { toastService } from '../../services/toastService';
 import { useAuth } from '../../context/AuthContext';
 
-// Lista de edificios disponibles (puedes ajustar esto según los reales de tu facultad)
+// Lista de edificios disponibles
 const EDIFICIOS_DISPONIBLES = ['ADM1', 'ADM2', 'ADM3', 'ADM4', 'LAB_SISTEMAS', 'BODEGA_CENTRAL'];
 
 export default function VentanillaView() {
@@ -11,7 +11,7 @@ export default function VentanillaView() {
   // ESTADOS PRINCIPALES
   // --------------------------------------------------------
   const [tipoMovimiento, setTipoMovimiento] = useState('SALIDA');
-  const [edificio, setEdificio] = useState('ADM1'); // 🚀 NUEVO: Estado del edificio
+  const [edificio, setEdificio] = useState('ADM1');
   const [solicitante, setSolicitante] = useState(null);
   const [bandeja, setBandeja] = useState([]);
   const [observaciones, setObservaciones] = useState('');
@@ -34,7 +34,7 @@ export default function VentanillaView() {
   const [embalajeSeleccionado, setEmbalajeSeleccionado] = useState('null');
 
   // --------------------------------------------------------
-  // FETCH DE DATOS INICIALES
+  // FETCH DE DATOS INICIALES (Adaptado a Paginación)
   // --------------------------------------------------------
   useEffect(() => {
     fetchInitialData();
@@ -43,13 +43,15 @@ export default function VentanillaView() {
   const fetchInitialData = async () => {
     setLoadingData(true);
     try {
-      // Ejecutamos ambas peticiones en paralelo
+      // Traemos más registros para tener un catálogo y directorio amplio en ventanilla
       const [resUsuarios, resProductos] = await Promise.all([
-        api.get('/usuarios'),
-        api.get('/productos')
+        api.get('/usuarios', { params: { limit: 100 } }),
+        api.get('/productos', { params: { limit: 100 } })
       ]);
-      setUsuarios(resUsuarios.data);
-      setInsumos(resProductos.data);
+
+      //  CORRECCIÓN: Extraemos el arreglo .data del objeto paginado
+      setUsuarios(resUsuarios.data?.data || resUsuarios.data || []);
+      setInsumos(resProductos.data?.data || resProductos.data || []);
     } catch (error) {
       console.error('Error al cargar datos iniciales:', error);
       toastService.error('Error al conectar con la base de datos.');
@@ -59,14 +61,17 @@ export default function VentanillaView() {
   };
 
   // --------------------------------------------------------
-  // LÓGICA DE FILTRADO EN TIEMPO REAL
+  // LÓGICA DE FILTRADO SEGURO
   // --------------------------------------------------------
-  const filteredUsuarios = usuarios.filter(u => 
+  const listaUsuariosSegura = Array.isArray(usuarios) ? usuarios : [];
+  const listaInsumosSegura = Array.isArray(insumos) ? insumos : [];
+
+  const filteredUsuarios = listaUsuariosSegura.filter(u => 
     u.nombre?.toLowerCase().includes(userSearch.toLowerCase()) || 
     u.id_interno?.toLowerCase().includes(userSearch.toLowerCase())
   ).slice(0, 5);
 
-  const filteredInsumos = insumos.filter(i => 
+  const filteredInsumos = listaInsumosSegura.filter(i => 
     i.nombre?.toLowerCase().includes(productSearch.toLowerCase()) ||
     i.categoria?.toLowerCase().includes(productSearch.toLowerCase())
   );
@@ -79,7 +84,7 @@ export default function VentanillaView() {
 
     let nombreEmbalaje = 'Piezas sueltas (x1)';
     if (embalajeSeleccionado !== 'null') {
-      const emp = activeInsumo.embalajes.find(e => e.id.toString() === embalajeSeleccionado);
+      const emp = activeInsumo.embalajes?.find(e => e.id.toString() === embalajeSeleccionado);
       if (emp) nombreEmbalaje = `${emp.nombre_embalaje} (x${emp.factor_conversion})`;
     }
 
@@ -137,7 +142,6 @@ export default function VentanillaView() {
         embalajeId: item.embalajeId
       }));
 
-      //  SE AÑADE EL EDIFICIO AL PAYLOAD
       const payload = {
         tipo: tipoMovimiento,
         edificio: edificio, 
@@ -170,17 +174,21 @@ export default function VentanillaView() {
   // RENDERIZADO
   // --------------------------------------------------------
   return (
-    <div className="h-full flex flex-col animate-fade-in">
+    <div className="h-full flex flex-col animate-fade-in pb-2">
       
       {/* Header y Selectores Principales */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4 flex-shrink-0">
         <div>
-          <h2 className="text-2xl font-heading font-bold text-text-primary">Ventanilla Express</h2>
-          <p className="text-text-muted text-sm mt-1">Registro rápido de entradas y salidas</p>
+          <div className="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.015a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z" />
+            </svg>
+            <h2 className="text-2xl font-heading font-bold text-text-primary">Ventanilla Express</h2>
+          </div>
+          <p className="text-text-muted text-sm mt-0.5">Registro rápido de entradas y salidas</p>
         </div>
         
         <div className="flex flex-col sm:flex-row gap-3">
-          {/*  NUEVO: Selector de Edificio */}
           <select
             value={edificio}
             onChange={(e) => setEdificio(e.target.value)}
@@ -191,7 +199,6 @@ export default function VentanillaView() {
             ))}
           </select>
 
-          {/* Selector de Tipo */}
           <div className="flex bg-inputBg p-1 rounded-lg border border-border">
             <button 
               onClick={() => setTipoMovimiento('ENTRADA')}
@@ -209,25 +216,26 @@ export default function VentanillaView() {
         </div>
       </div>
 
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-0">
+      {/* Grid Principal sin Scroll Global en el Panel Izquierdo */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-0 overflow-hidden">
         
-        {/* PANEL IZQUIERDO: Búsqueda y Selección */}
-        <div className="lg:col-span-7 flex flex-col gap-6 overflow-y-auto pr-2">
+        {/*  PANEL IZQUIERDO: Estructura fija (sin scroll externo) */}
+        <div className="lg:col-span-7 flex flex-col gap-4 min-h-0 overflow-hidden">
           
-          {/* Paso 1: Solicitante Dinámico */}
-          <div className="bg-card border border-border rounded-xl p-5 shadow-sm transition-colors">
-            <h3 className="font-heading font-bold text-sm uppercase text-text-muted tracking-wider mb-4">
+          {/* Paso 1: Solicitante Dinámico (Tamaño Fijo) */}
+          <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex-shrink-0">
+            <h3 className="font-heading font-bold text-xs uppercase text-text-muted tracking-wider mb-3">
               1. {tipoMovimiento === 'ENTRADA' ? 'Identificar personal que recibe (Opcional)' : 'Identificar Solicitante'}
             </h3>
             
             {!solicitante ? (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <input 
                   type="text" 
                   value={userSearch}
                   onChange={(e) => setUserSearch(e.target.value)}
                   placeholder="Buscar por matrícula o nombre..." 
-                  className="w-full bg-inputBg border-[1.5px] border-border rounded-lg py-2.5 px-4 text-sm text-text-primary outline-none focus:border-accent transition-colors"
+                  className="w-full bg-inputBg border-[1.5px] border-border rounded-lg py-2 px-3 text-sm text-text-primary outline-none focus:border-accent transition-colors"
                 />
                 
                 {userSearch && (
@@ -252,14 +260,14 @@ export default function VentanillaView() {
                 )}
               </div>
             ) : (
-              <div className="flex items-center justify-between bg-inputBg border border-border p-3 rounded-lg animate-fade-in">
+              <div className="flex items-center justify-between bg-inputBg border border-border p-2.5 rounded-lg animate-fade-in">
                 <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-heading font-bold ${tipoMovimiento === 'ENTRADA' ? 'bg-[#10B981]/20 text-[#10B981]' : 'bg-accent/20 text-accent'}`}>
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center font-heading font-bold text-xs ${tipoMovimiento === 'ENTRADA' ? 'bg-[#10B981]/20 text-[#10B981]' : 'bg-accent/20 text-accent'}`}>
                     {solicitante.nombre.substring(0, 2).toUpperCase()}
                   </div>
                   <div>
-                    <p className="font-bold text-text-primary text-sm">{solicitante.nombre}</p>
-                    <p className="text-xs text-text-secondary">{solicitante.departamento || 'Sin depto'} | {solicitante.rol || 'Solicitante'}</p>
+                    <p className="font-bold text-text-primary text-xs">{solicitante.nombre}</p>
+                    <p className="text-[0.7rem] text-text-secondary">{solicitante.departamento || 'Sin depto'} | {solicitante.rol || 'Solicitante'}</p>
                   </div>
                 </div>
                 <button onClick={() => setSolicitante(null)} className="text-xs font-bold text-red-500 hover:text-red-600 px-2">Cambiar</button>
@@ -267,46 +275,49 @@ export default function VentanillaView() {
             )}
           </div>
 
-          {/* Paso 2: Insumos */}
-          <div className="bg-card border border-border rounded-xl p-5 shadow-sm flex-1 flex flex-col">
-            <h3 className="font-heading font-bold text-sm uppercase text-text-muted tracking-wider mb-4">2. Catálogo de Insumos</h3>
+          {/*  Paso 2: Insumos con Scroll EXCLUSIVO en la lista */}
+          <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex-1 min-h-0 flex flex-col overflow-hidden">
+            <h3 className="font-heading font-bold text-xs uppercase text-text-muted tracking-wider mb-3 flex-shrink-0">
+              2. Catálogo de Insumos
+            </h3>
+            
             <input 
               type="text" 
               value={productSearch}
               onChange={(e) => setProductSearch(e.target.value)}
               placeholder="Buscar producto por nombre o categoría..." 
-              className="w-full bg-inputBg border-[1.5px] border-border rounded-lg py-2.5 px-4 text-sm text-text-primary outline-none focus:border-accent mb-4"
+              className="w-full bg-inputBg border-[1.5px] border-border rounded-lg py-2 px-3 text-sm text-text-primary outline-none focus:border-accent mb-3 flex-shrink-0"
             />
             
-            {/* Sección inyectada: Cantidad y Embalaje */}
+            {/* Panel flotante/fijo de cantidad y embalaje */}
             {activeInsumo && (
-              <div className="mb-4 p-4 border border-accent/40 bg-[var(--accent-glow)] rounded-xl animate-fade-in">
-                <div className="flex justify-between items-start mb-3">
+              <div className="mb-3 p-3 border border-accent/40 bg-[var(--accent-glow)] rounded-xl animate-fade-in flex-shrink-0">
+                <div className="flex justify-between items-start mb-2">
                   <div>
-                    <p className="text-[0.65rem] font-heading font-bold uppercase tracking-widest text-accent mb-1">Configurar Adición</p>
-                    <p className="font-semibold text-sm text-text-primary">{activeInsumo.nombre}</p>
+                    <p className="text-[0.6rem] font-heading font-bold uppercase tracking-widest text-accent mb-0.5">Configurar Adición</p>
+                    <p className="font-semibold text-xs text-text-primary">{activeInsumo.nombre}</p>
                   </div>
                   <button onClick={() => setActiveInsumo(null)} className="text-text-secondary hover:text-red-500">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                   </button>
                 </div>
 
-                <div className="flex items-center gap-3 flex-wrap">
-                  <div className="flex items-center bg-card border border-border rounded-lg h-9">
-                    <button onClick={() => changeQty(-1)} className="px-3 text-text-secondary hover:text-accent font-bold h-full">−</button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center bg-card border border-border rounded-lg h-8">
+                    <button onClick={() => changeQty(-1)} className="px-2.5 text-text-secondary hover:text-accent font-bold h-full">−</button>
                     <input 
                       type="number" 
                       value={cantidadInput} 
                       onChange={(e) => setCantidadInput(Math.max(1, parseInt(e.target.value) || 1))}
-                      className="w-12 text-center bg-transparent border-none outline-none font-mono text-sm font-bold text-text-primary appearance-none h-full"
+                      className="w-10 text-center bg-transparent border-none outline-none font-mono text-xs font-bold text-text-primary appearance-none h-full"
                     />
-                    <button onClick={() => changeQty(1)} className="px-3 text-text-secondary hover:text-accent font-bold h-full">+</button>
+                    <button onClick={() => changeQty(1)} className="px-2.5 text-text-secondary hover:text-accent font-bold h-full">+</button>
                   </div>
 
                   <select 
                     value={embalajeSeleccionado}
                     onChange={(e) => setEmbalajeSeleccionado(e.target.value)}
-                    className="flex-1 min-w-[140px] bg-card border border-border rounded-lg h-9 px-3 text-sm text-text-primary outline-none focus:border-accent font-mono"
+                    className="flex-1 min-w-[130px] bg-card border border-border rounded-lg h-8 px-2 text-xs text-text-primary outline-none focus:border-accent font-mono"
                   >
                     <option value="null">Unidad base (×1 {activeInsumo.unidad_medida})</option>
                     {activeInsumo.embalajes?.map(emb => (
@@ -318,7 +329,7 @@ export default function VentanillaView() {
 
                   <button 
                     onClick={addToBandeja}
-                    className="h-9 px-4 rounded-lg bg-text-primary hover:opacity-85 text-app font-heading font-bold text-sm transition-opacity shadow-sm whitespace-nowrap dark:bg-accent dark:text-[#002D4C]"
+                    className="h-8 px-3 rounded-lg bg-text-primary hover:opacity-85 text-app font-heading font-bold text-xs transition-opacity shadow-sm whitespace-nowrap dark:bg-accent dark:text-[#002D4C]"
                   >
                     + Agregar
                   </button>
@@ -326,14 +337,12 @@ export default function VentanillaView() {
               </div>
             )}
 
-            {/* Lista de Insumos (Calcula Stock según el edificio seleccionado) */}
-            <div className="space-y-2 overflow-y-auto pr-1">
+            {/*  LISTA DE INSUMOS CON SCROLL ÚNICO */}
+            <div className="space-y-2 overflow-y-auto min-h-0 flex-1 pr-1 border-t border-border/40 pt-2">
               {loadingData ? (
-                <div className="p-4 text-center text-text-muted animate-pulse">Cargando catálogo...</div>
+                <div className="p-4 text-center text-text-muted text-xs animate-pulse">Cargando catálogo...</div>
               ) : filteredInsumos.length > 0 ? (
                 filteredInsumos.map(insumo => {
-                  
-                  //  CÁLCULO DE STOCK DINÁMICO POR EDIFICIO
                   const existenciaEdificio = insumo.existencias?.find(e => e.edificio === edificio);
                   const stockActualNum = existenciaEdificio ? Number(existenciaEdificio.stock_actual) : 0;
                   const stockMinimoNum = existenciaEdificio ? Number(existenciaEdificio.stock_minimo) : 5;
@@ -347,80 +356,81 @@ export default function VentanillaView() {
                         setCantidadInput(1);
                         setEmbalajeSeleccionado('null');
                       }}
-                      className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all group ${
+                      className={`flex items-center justify-between p-2.5 rounded-lg border cursor-pointer transition-all group ${
                         activeInsumo?.id === insumo.id 
                           ? 'border-accent bg-accent/5' 
                           : 'border-border bg-app hover:border-accent/50'
                       }`}
                     >
                       <div>
-                        <p className="font-semibold text-text-primary text-sm">{insumo.nombre}</p>
-                        <p className={`text-xs font-mono mt-0.5 ${isCritico && stockActualNum > 0 ? 'text-orange-500 font-bold' : isCritico ? 'text-red-500 font-bold' : 'text-text-muted'}`}>
+                        <p className="font-semibold text-text-primary text-xs">{insumo.nombre}</p>
+                        <p className={`text-[0.7rem] font-mono mt-0.5 ${isCritico && stockActualNum > 0 ? 'text-orange-500 font-bold' : isCritico ? 'text-red-500 font-bold' : 'text-text-muted'}`}>
                           Stock en {edificio}: {stockActualNum.toFixed(2)} {insumo.unidad_medida}
                         </p>
                       </div>
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center border ${activeInsumo?.id === insumo.id ? 'border-accent bg-accent text-white' : 'border-border text-transparent group-hover:border-accent/50'}`}>
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center border ${activeInsumo?.id === insumo.id ? 'border-accent bg-accent text-white' : 'border-border text-transparent group-hover:border-accent/50'}`}>
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
                       </div>
                     </div>
                   );
                 })
               ) : (
-                <div className="p-4 text-center text-text-muted text-sm">No se encontraron productos.</div>
+                <div className="p-4 text-center text-text-muted text-xs">No se encontraron productos.</div>
               )}
             </div>
+
           </div>
         </div>
 
         {/* PANEL DERECHO: Resumen de Operación */}
-        <div className="lg:col-span-5 bg-card border border-border rounded-xl shadow-sm flex flex-col overflow-hidden relative">
+        <div className="lg:col-span-5 bg-card border border-border rounded-xl shadow-sm flex flex-col overflow-hidden relative min-h-0">
           
-          <div className="p-5 border-b border-border bg-inputBg flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <h3 className="font-heading font-bold text-sm uppercase text-text-primary tracking-wider flex items-center gap-2">
-              <svg className="w-5 h-5 text-accent" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+          <div className="p-4 border-b border-border bg-inputBg flex flex-col sm:flex-row sm:items-center justify-between gap-2 flex-shrink-0">
+            <h3 className="font-heading font-bold text-xs uppercase text-text-primary tracking-wider flex items-center gap-2">
+              <svg className="w-4 h-4 text-accent" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
               Resumen de la Transacción
             </h3>
-            <span className="bg-accent/10 text-accent text-xs font-bold px-2.5 py-1 rounded-full font-mono">{bandeja.length} items</span>
+            <span className="bg-accent/10 text-accent text-[0.7rem] font-bold px-2 py-0.5 rounded-full font-mono">{bandeja.length} items</span>
           </div>
 
-          <div className="flex-1 p-5 overflow-y-auto flex flex-col gap-4">
+          <div className="flex-1 p-4 overflow-y-auto min-h-0 flex flex-col gap-3">
             {bandeja.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center text-text-muted opacity-70">
-                <svg className="w-12 h-12 mb-3" fill="none" stroke="currentColor" strokeWidth="1" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-                <p className="text-sm font-medium">La bandeja está vacía</p>
+                <svg className="w-10 h-10 mb-2" fill="none" stroke="currentColor" strokeWidth="1" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                <p className="text-xs font-medium">La bandeja está vacía</p>
               </div>
             ) : (
               bandeja.map(item => (
-                <div key={item.bandejaId} className="bg-app border border-border p-3 rounded-lg flex items-center justify-between gap-3 animate-fade-in">
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-text-primary leading-tight mb-1">{item.nombre}</p>
-                    <span className="inline-block bg-inputBg border border-border px-2 py-0.5 rounded text-[0.7rem] font-mono text-text-secondary">
+                <div key={item.bandejaId} className="bg-app border border-border p-2.5 rounded-lg flex items-center justify-between gap-3 animate-fade-in flex-shrink-0">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-text-primary truncate mb-0.5">{item.nombre}</p>
+                    <span className="inline-block bg-inputBg border border-border px-1.5 py-0.5 rounded text-[0.65rem] font-mono text-text-secondary">
                       {item.cantidadOperacion}x {item.embalajeNombre}
                     </span>
                   </div>
-                  <button onClick={() => quitarInsumo(item.bandejaId)} className="p-2 text-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-md transition-colors">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                  <button onClick={() => quitarInsumo(item.bandejaId)} className="p-1.5 text-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-md transition-colors">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                   </button>
                 </div>
               ))
             )}
 
-            <div className="mt-auto pt-4 border-t border-border">
-              <label className="text-xs font-heading font-bold uppercase text-text-muted tracking-wider block mb-2">Observaciones</label>
+            <div className="mt-auto pt-3 border-t border-border flex-shrink-0">
+              <label className="text-[0.65rem] font-heading font-bold uppercase text-text-muted tracking-wider block mb-1">Observaciones</label>
               <textarea 
                 value={observaciones}
                 onChange={(e) => setObservaciones(e.target.value)}
                 placeholder="Motivo, proyecto o detalles extra (Opcional)..."
-                className="w-full bg-inputBg border border-border rounded-lg p-3 text-sm text-text-primary outline-none focus:border-accent resize-none h-20"
+                className="w-full bg-inputBg border border-border rounded-lg p-2.5 text-xs text-text-primary outline-none focus:border-accent resize-none h-16"
               />
             </div>
           </div>
 
-          <div className="p-5 bg-card border-t border-border">
+          <div className="p-4 bg-card border-t border-border flex-shrink-0">
             <button 
               onClick={handleConfirmar}
               disabled={bandeja.length === 0 || (!solicitante && tipoMovimiento === 'SALIDA') || isSubmitting}
-              className={`w-full py-3.5 rounded-xl font-heading font-bold text-sm tracking-wide transition-all shadow-md flex justify-center items-center gap-2
+              className={`w-full py-3 rounded-xl font-heading font-bold text-xs tracking-wide transition-all shadow-md flex justify-center items-center gap-2
                 ${bandeja.length === 0 || (!solicitante && tipoMovimiento === 'SALIDA') || isSubmitting
                   ? 'bg-border text-text-muted cursor-not-allowed opacity-50'
                   : tipoMovimiento === 'ENTRADA' 
@@ -429,10 +439,10 @@ export default function VentanillaView() {
                 }`}
             >
               {isSubmitting ? (
-                <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
               ) : (
                 <>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
                   Confirmar {tipoMovimiento === 'ENTRADA' ? 'Ingreso al Almacén' : 'Entrega de Insumos'}
                 </>
               )}

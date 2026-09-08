@@ -132,17 +132,63 @@ class MovimientoService {
         });
     }
 
-    async obtenerHistorial() {
-        return await prisma.movimiento.findMany({
-            include: {
-                producto: true,
-                solicitante: true,
-                encargado: true
-            },
-            orderBy: {
-                fecha: 'desc'
+    async obtenerHistorial({ page = 1, limit = 10, busqueda = '', tipo = 'TODOS', edificio = 'TODOS' }) {
+        const pageNum = parseInt(page, 10) || 1;
+        const limitNum = parseInt(limit, 10) || 10;
+        const skip = (pageNum - 1) * limitNum;
+
+        const where = {};
+
+        // Búsqueda inteligente (en producto, solicitante, encargado o notas)
+        if (busqueda.trim()) {
+            where.OR = [
+                { producto: { nombre: { contains: busqueda, mode: 'insensitive' } } },
+                { solicitante: { nombre: { contains: busqueda, mode: 'insensitive' } } },
+                { encargado: { nombre: { contains: busqueda, mode: 'insensitive' } } },
+                { observaciones: { contains: busqueda, mode: 'insensitive' } }
+            ];
+        }
+
+        // Filtro por tipo de movimiento (ENTRADA o SALIDA)
+        if (tipo && tipo !== 'TODOS') {
+            where.tipo = tipo.toUpperCase();
+        }
+
+        // Filtro por edificio
+        if (edificio && edificio !== 'TODOS') {
+            where.edificio = edificio;
+        }
+
+        const [totalItems, movimientos] = await Promise.all([
+            prisma.movimiento.count({ where }),
+            prisma.movimiento.findMany({
+                where,
+                take: limitNum,
+                skip: skip,
+                include: {
+                    producto: true,
+                    solicitante: true,
+                    encargado: true
+                },
+                orderBy: {
+                    fecha: 'desc'
+                }
+            })
+        ]);
+
+        const totalPages = Math.ceil(totalItems / limitNum);
+
+        return {
+            data: movimientos,
+            pagination: {
+                totalItems,
+                totalPages,
+                currentPage: pageNum,
+                limit: limitNum,
+                hasNextPage: pageNum < totalPages,
+                hasPrevPage: pageNum > 1
             }
-        });
+        };
     }
     //Editar Transaccion con Compensación 
     async actualizarTransaccion(id, nuevaCantidad, nuevoTipo, observaciones, solicitanteId, adminId) {
